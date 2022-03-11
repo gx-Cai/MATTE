@@ -208,10 +208,6 @@ class ClusterResult():
             print(k, v)
         if fig:
             f1 = self.Vis_Jmat()
-            plt.title("Genes' distribute")
-            plt.xlabel(self.label[-1].split("|")[-1])
-            plt.ylabel(self.label[-2].split("|")[-1])
-
             print("# --- samples' distribution:")
             sf = self.SampleFeature(df_exp=self.df_exp)
             f2 = Fig_SampleFeature(
@@ -232,7 +228,9 @@ class ClusterResult():
                 data=JM, fmt=".0f",
                 cmap="RdPu", square=True,
                 annot=True, annot_kws={"fontsize": 8})
-            
+        plt.title("Genes' distribute")
+        plt.xlabel(self.label[-1].split("|")[-1])
+        plt.ylabel(self.label[-2].split("|")[-1])
         return f1
 
     # Cluster Score Calculation
@@ -418,13 +416,12 @@ def Fig_SampleFeature(
     :type metric: str, optional
     :return: the figure
     :rtype: `plt.figure`
-    """    
+    """
+    model = PCA(n_components=2) if model is None else model
     if weighted_distcance:
-        model = PCA(n_components=2,metric="precomputed") if model is None else model
         psf = abs(sample_feature.weight_distance(metric=metric))
         psf = model.fit_transform(psf)
     else:
-        model = PCA(n_components=2,metric=metric) if model is None else model
         psf = model.fit_transform(sample_feature)
 
     if not hasattr(model, "fit_transform"):

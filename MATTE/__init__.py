@@ -12,7 +12,7 @@ from itertools import combinations
 from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
-__version__ = "0.5"
+__version__ = "1.0"
 __all__ = ["PipeFunc", "AlignPipe", 'preprocess_funcs_generate','ModuleEmbedder']
 
 class PipeFunc():
@@ -478,7 +478,10 @@ class ModuleEmbedder():
         :type verbose: bool, optional
         :return: gene ranking score
         :rtype: `pd.Series`
-        """        
+        """
+        if len(self.cluster_res) == 0:
+            self.pipeline_clustering(X, y, verbose=verbose)
+        
         self.labels = np.unique(y)
         if verbose:
             print(f"There are {len(self.labels)} labels: {self.labels}")
