@@ -51,7 +51,7 @@ pipeline
 
 
 ```python
-## In TenaPipe stores some functions (PipeFunc type)
+## In Pipeline stores some functions (PipeFunc type)
 pipeline.funcs,pipeline.cluster_func
 ```
 
@@ -470,7 +470,7 @@ gene_rank
 
 
 ```python
-from TENA.analysis import Fig_SampleFeature
+from MATTE.analysis import Fig_SampleFeature
 
 # Showing the Summary.
 R.summary()
@@ -739,7 +739,7 @@ annote_file
 
 
 ```python
-from TENA.analysis import FunctionEnrich
+from MATTE.analysis import FunctionEnrich
 funEnrichRes = FunctionEnrich(annote_file,gene_set)
 all_items,term_genes = funEnrichRes
 ```
@@ -933,7 +933,7 @@ target
 
 
 ```python
-from TENA.analysis import Fig_Fuction
+from MATTE.analysis import Fig_Fuction
 f = Fig_Fuction(target,"p_value",dpi=300)
 ```
 
