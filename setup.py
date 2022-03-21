@@ -10,7 +10,7 @@ requires_packages = [
 
 setup(
     name = 'MATTE',
-    version = '1.0.3',
+    version = '1.0.5',
     packages = find_packages(),
     install_requires = requires_packages,
     url = 'https://github.com/gx-Cai/MATTE',

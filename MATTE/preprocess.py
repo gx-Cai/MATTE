@@ -1,3 +1,4 @@
+import itertools
 from .utils import printv, kw_decorator
 import pandas as pd
 import numpy as np
@@ -60,9 +61,8 @@ def RPKM2TPM(df_exp):
     df = df_exp.values
     oneM = 1e6
     df_sum = df.sum(axis=0)
-    for i in range(df.shape[0]):
-        for j in range(df.shape[1]):
-            df[i, j] = (df[i, j]/df_sum[j]) * oneM
+    for i, j in itertools.product(range(df.shape[0]), range(df.shape[1])):
+        df[i, j] = (df[i, j]/df_sum[j]) * oneM
     return pd.DataFrame(data=df, columns=df_exp.columns, index=df_exp.index)
 
 

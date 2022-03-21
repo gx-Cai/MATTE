@@ -12,7 +12,7 @@ from itertools import combinations
 from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
-__version__ = "1.0.3"
+__version__ = "1.0.5"
 __all__ = ["PipeFunc", "AlignPipe", 'preprocess_funcs_generate','ModuleEmbedder']
 
 class PipeFunc():
@@ -381,16 +381,24 @@ class ModuleEmbedder():
         :type y: `pandas.Series`
         :param verbose: defaults to True
         :type verbose: bool, optional
-        """        
-        bar = tqdm(total=len(list(combinations(self.labels, 2))))
-        for idx, (i, j) in enumerate(combinations(self.labels, 2)):
-            bar.set_description(f'round {idx}: {i} vs {j}')
-            X_ij = X[(y == j) | (y == i)]
-            y_ij = y[(y == i) | (y == j)]
-            CR = self._pipeline_clustering_single(X_ij, y_ij,)
-            self.cluster_res.append(CR)
-            bar.update(1)
-        bar.close()
+        """
+        if verbose:
+            bar = tqdm(total=len(list(combinations(self.labels, 2))))
+            for idx, (i, j) in enumerate(combinations(self.labels, 2)):
+                bar.set_description(f'round {idx}: {i} vs {j}')
+                X_ij = X[(y == j) | (y == i)]
+                y_ij = y[(y == i) | (y == j)]
+                CR = self._pipeline_clustering_single(X_ij, y_ij,)
+                self.cluster_res.append(CR)
+                bar.update(1)
+            bar.close()
+        else:
+            for i, j in combinations(self.labels, 2):
+                X_ij = X[(y == j) | (y == i)]
+                y_ij = y[(y == i) | (y == j)]
+                CR = self._pipeline_clustering_single(X_ij, y_ij,)
+                self.cluster_res.append(CR)
+
 
     def _gene_rank_single(self, CR, X):
         """Rank genes by their importance sum in one pair of phenotypes comparasion.
