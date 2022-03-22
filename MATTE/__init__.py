@@ -12,7 +12,7 @@ from itertools import combinations
 from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
-__version__ = "1.0.5"
+__version__ = "1.1.0"
 __all__ = ["PipeFunc", "AlignPipe", 'preprocess_funcs_generate','ModuleEmbedder']
 
 class PipeFunc():

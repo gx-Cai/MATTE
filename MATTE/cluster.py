@@ -185,6 +185,11 @@ def build_results(
         cluster_label), "Contains duplicated genes, please check inputs."
     res = pd.Series(index=genes, data=cluster_label)
     cluster_properties["score"] = ch_score(before_cluster_df, res)
+    if ('error' in cluster_properties.keys()) and \
+        (cluster_properties["score"]*len(genes)/(2*cluster_properties["error"])<1e5):
+        print(
+            f"Getting Low score:{cluster_properties['score']} and High Error:{cluster_properties['error']}, \
+            try to set `n_clusters` more suitable.(larger may be better)")
     before_cluster_df = pd.DataFrame(before_cluster_df, index=genes)
     res = ClusterResult(
         cluster_res=res, df_exp=df_exp, df_pheno=pd.DataFrame(

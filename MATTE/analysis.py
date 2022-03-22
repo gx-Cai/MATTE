@@ -101,6 +101,7 @@ class ClusterResult():
         self._reorder(before_cluster_df, cluster_res,by=order_rule)
         self._fixingRes(cluster_res, label=self.label)
         self._JMatrix()
+        self._module_genes()
 
 
     # --- built-in methods
@@ -469,7 +470,7 @@ def FunctionEnrich(annote_file, gene_set, category_seperate_cal=True):
         annot = pd.read_table(annote_file, index_col="Term_ID")
     elif type(annote_file) == pd.DataFrame:
         annot = deepcopy(annote_file)
-    assert set(["GeneID", "Term", "Category"]) <= set(annote_file.columns)
+    assert {"GeneID", "Term", "Category"} <= set(annote_file.columns)
     annot.index = annote_file["Term_ID"]
     annot["GeneID"] = pd.Series(annot["GeneID"], dtype=type(gene_set[0]))
     gene_set = set(gene_set) & set(annote_file["GeneID"])
@@ -566,7 +567,7 @@ def Fig_Fuction(df_enrich, color_columns, cmap=cm.Set1, width_height_ratio=2, **
     xlim_max = int(df_enrich['gene_ratio'].max()*10+1)/10
     for ax in axes:
         ax.set_xlim(0, xlim_max)
-    
+
     for ax in axes[:-1]:
         ax.set_xticklabels([])
         ax.set_xticks([])
@@ -577,6 +578,6 @@ def Fig_Fuction(df_enrich, color_columns, cmap=cm.Set1, width_height_ratio=2, **
     cbar.set_ticks(ticks=[0, 0.25, 0.5, 0.75, 1])
     cbar.set_ticklabels([0, -lable_max/4, -lable_max /
                          2, -3*lable_max/4, -lable_max])
-    cbar.set_label("-log(%s)" % color_columns)
+    cbar.set_label(f"-log({color_columns})")
 
     return fig
