@@ -75,6 +75,14 @@ class WeightedDataFrame(pd.DataFrame):
 
 class ClusterResult():
     """A class to store the result of clustering. contains inputs and results.
+    :attr: res: the result of clustering, a pandas.DataFrame
+    :attr: df_exp: the input of clustering, a pandas.DataFrame
+    :attr: df_pheno: the input of clustering, a pandas.Series
+    :attr: cluster_properties: the property of clustering, a dict
+    :attr: label: the label of each cluster, a numpy.array
+    :attr: n_cluster: the number of cluster, an int
+    :attr: JM: the J-matrix of clustering, a numpy.array
+    :attr: module_genes: the genes of each module, a dict
     """    
     def __init__(self, cluster_res, before_cluster_df,df_exp,df_pheno,cluster_properties,order_rule="input") -> None:
         """
