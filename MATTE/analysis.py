@@ -75,14 +75,26 @@ class WeightedDataFrame(pd.DataFrame):
 
 class ClusterResult():
     """A class to store the result of clustering. contains inputs and results.
-    :attr: res: the result of clustering, a pandas.DataFrame
-    :attr: df_exp: the input of clustering, a pandas.DataFrame
-    :attr: df_pheno: the input of clustering, a pandas.Series
-    :attr: cluster_properties: the property of clustering, a dict
-    :attr: label: the label of each cluster, a numpy.array
-    :attr: n_cluster: the number of cluster, an int
-    :attr: JM: the J-matrix of clustering, a numpy.array
-    :attr: module_genes: the genes of each module, a dict
+    .. attribute:: res
+        The result of clustering, a pandas.DataFrame.
+        Including each gene's label in each pheno.
+    .. attribute:: df_exp
+        The input of clustering, a pandas.DataFrame
+    .. attribute:: df_pheno
+        The input of clustering, a pandas.Series
+    .. attribute:: cluster_properties
+        The property of clustering, a dict
+        containing the score, loss, and some clustering parameters.
+    .. attribute:: label
+        All labels, a numpy.array
+    .. attribute:: n_cluster
+        The number of cluster, an int
+    .. attribute:: JM
+        The J-matrix of clustering, a numpy.array
+        can be calculated from :attr:`res`
+    .. attribute:: module_genes
+        The genes of each module, a dict
+        .. note:: Only Not "matched" modules are contrained.
     """    
     def __init__(self, cluster_res, before_cluster_df,df_exp,df_pheno,cluster_properties,order_rule="input") -> None:
         """
@@ -242,7 +254,8 @@ class ClusterResult():
         plt.ylabel(self.label[-2].split("|")[-1])
         return f1
 
-    # Cluster Score Calculation
+    # --- Cluster Score Calculation
+
     def MCScore(self, method=ch_score):
         """calculation subscore:the loss between each mc. the result stored in `self.property["MCScore"]
 
@@ -289,7 +302,7 @@ class ClusterResult():
 
         return group_feature, group_weight
 
-    # Samples' feature and phenotype's signature.
+    # --- Samples' feature and phenotype's signature.
 
     def SampleFeature(self, df_exp=None, module_genes=None, return_df=True, **kwargs):
         """Calculate Samples' module feature.(average default)
@@ -404,7 +417,7 @@ class ClusterResult():
             SNR[i] = np.abs(mean_pos-mean_neg)/ (sd_neg+sd_pos+1e-10)
         return SNR.sort_values(ascending=False)
 
-# Showing
+# Visulization
 
 def Fig_SampleFeature(
         sample_feature, labels, color=None,
