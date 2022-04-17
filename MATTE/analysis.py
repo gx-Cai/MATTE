@@ -76,25 +76,33 @@ class WeightedDataFrame(pd.DataFrame):
 class ClusterResult():
     """A class to store the result of clustering. contains inputs and results.
     .. attribute:: res
-        The result of clustering, a pandas.DataFrame.
-        Including each gene's label in each pheno.
+    The result of clustering, a pandas.DataFrame.
+    Including each gene's label in each pheno.
+
     .. attribute:: df_exp
-        The input of clustering, a pandas.DataFrame
+    The input of clustering, a pandas.DataFrame
+
     .. attribute:: df_pheno
-        The input of clustering, a pandas.Series
+    The input of clustering, a pandas.Series
+
     .. attribute:: cluster_properties
-        The property of clustering, a dict
-        containing the score, loss, and some clustering parameters.
+    The property of clustering, a dict
+    containing the score, loss, and some clustering parameters.
+
     .. attribute:: label
-        All labels, a numpy.array
+    All labels, a numpy.array
+    
     .. attribute:: n_cluster
-        The number of cluster, an int
+    The number of cluster, an int
+    
     .. attribute:: JM
-        The J-matrix of clustering, a numpy.array
-        can be calculated from :attr:`res`
+    The J-matrix of clustering, a numpy.array
+    can be calculated from :attr:`res`
+
     .. attribute:: module_genes
-        The genes of each module, a dict
-        .. note:: Only Not "matched" modules are contrained.
+    The genes of each module, a dict
+    
+    .. note:: Only Not "matched" modules are contrained.
     """    
     def __init__(self, cluster_res, before_cluster_df,df_exp,df_pheno,cluster_properties,order_rule="input") -> None:
         """
@@ -255,16 +263,6 @@ class ClusterResult():
         return f1
 
     # --- Cluster Score Calculation
-
-    def MCScore(self, method=ch_score):
-        """calculation subscore:the loss between each mc. the result stored in `self.property["MCScore"]
-
-        :param method: method used to calculate, annother recommend function:`sklearn.metrics.davies_bouldin_score`, defaults to `sklearn.metrics.calinski_harabasz_score`.
-        :type method: _type_, optional
-        """        
-        self.property["MCScore"] = method(self.df_exp, [str(
-            self.res.iloc[i, 0:2].values) for i in range(self.res.shape[0])])
-
     def MCFeature(self, df_exp=None, module_genes=None, model=None):
         """calculation group features.using PCA for it reserving more information than others.
 
@@ -398,7 +396,7 @@ class ClusterResult():
         :param sample_feature: can be calculated by the function :func:`MATTE.analysis.ClusterResult.SampleFeature`
         :type sample_feature: :class:`MATTE.WeightedDataFrame`
         :param pheno: the label of samples, defaults to None (set to be :attr:`ClusterResult.pheno`)
-        :type pheno: _type_, optional
+        :type pheno: array-like, optional
         :return: SNR, a `pd.Series` whose index is Module ID, and value is the SNR.
         :rtype: pd.Series
         """        
@@ -416,6 +414,33 @@ class ClusterResult():
             sd_neg = np.std(sample_feature.loc[neg_samples, i])
             SNR[i] = np.abs(mean_pos-mean_neg)/ (sd_neg+sd_pos+1e-10)
         return SNR.sort_values(ascending=False)
+
+    def GeneSNR(self,sample_feature,pheno=None):
+        """Use :func:`ClusterResult.ModuleSNR` to calculate the correcting SNR of each gene.
+
+        :math:`GeneSNR = ModuleSNR * PearsonCorrelation(GeneExpression, ModuleEigenvector)`
+
+        .. note:
+            SNR of genes with sample label in each phenotypes will be set to 0.
+
+        :param sample_feature: can be calculated by the function :func:`MATTE.analysis.ClusterResult.SampleFeature`
+        :type sample_feature: :class:`MATTE.WeightedDataFrame`
+        :param pheno: the label of samples, defaults to None (set to be :attr:`ClusterResult.pheno`)
+        :type pheno: array-like, optional
+        :return: SNR, a `pd.Series` whose index is Module ID, and value is the SNR.
+        :rtype: _type_
+        """
+        if pheno is None:
+            pheno = self.pheno
+
+        module_snr = self.ModuleSNR(sample_feature,pheno)
+        gene_snr = pd.Series(index=self.res.index,data=0)
+        for i in self.res.index[~self.res['matched']]:
+            id1,id2 = self.res.loc[i,:].values.tolist()[:2]
+            moduleid = f"M{id1}.{id2}_0"
+            gene_snr[i] = abs(module_snr[moduleid]* np.corrcoef(
+                x = self.df_exp.loc[i,:],y = sample_feature.loc[:,moduleid])[0,1])
+        return gene_snr
 
 # Visulization
 

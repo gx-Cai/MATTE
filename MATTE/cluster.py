@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from Bio.Cluster import kcluster
-from sklearn.cluster import spectral_clustering, SpectralBiclustering, KMeans
+from sklearn.cluster import spectral_clustering, SpectralBiclustering
 from sklearn.metrics import calinski_harabasz_score as ch_score
 from sklearn.model_selection import KFold
 from .analysis import ClusterResult, affinity_matrix
@@ -14,7 +14,7 @@ class CrossCluster():
     if `preset` is not set, then must use :func:`CrossCluster.build_from_func` or :func:`CrossCluster.build_from_model` to set the function to cluster. 
     """    
     def __init__(
-        self, preset=None, 
+        self, presetting='kmeans', 
         use_affinity=False, verbose=True,
         **kwargs) -> None:
         """
@@ -32,7 +32,7 @@ class CrossCluster():
         self.verbose = verbose
         self.properties = {}
         self.kwargs = kwargs
-        self.presetting = preset
+        self.presetting = presetting
 
     def build_from_func(self,func):
         """build this class from function
@@ -42,7 +42,7 @@ class CrossCluster():
         """        
         self.cluster_func = func
     
-    def build_from_model(self,model,model_attr='label_',**calling_kwargs):
+    def build_from_model(self,model,model_attr='labels_',**calling_kwargs):
         """build this class from model
 
         :param model: model to cluster, must have `model_attr` attribute and `fit` method
@@ -65,10 +65,11 @@ class CrossCluster():
         :rtype: dict
         """        
         self.kwargs.update(kwargs)
+        self.presetting = self.kwargs.get('presetting',self.presetting)
         self.preset()
 
         if self.use_aff:
-            dist_type = kwargs.get("dist_type", "a")
+            dist_type = kwargs.get("dist_type", "e")
             weight = kwargs.get("weight", [1]*before_cluster_df.shape[1])
 
             printv("Using affinity matrix will cost more time and meomory.",verbose=self.kwargs.get('verbose',True))
@@ -110,7 +111,7 @@ class CrossCluster():
         """        
         def kcluster_calling(data,**kwargs):
             method = kwargs.get("method", "a")
-            dist_type = kwargs.get("dist_type", "a")
+            dist_type = kwargs.get("dist_type", "e")
             weight = kwargs.get("weight", [1]*data.shape[1])
             n_clusters = kwargs.get("n_clusters", 8)
             npass = kwargs.get("npass", 20)
@@ -128,7 +129,6 @@ class CrossCluster():
             n_clusters = kwargs.get("n_clusters", 8)
             n_component = max(n_clusters) if n_component is None else n_component
             n_init = kwargs.get("n_init", 10)
-            weights = [1]*data.shape[1] if weights is None else weights
             return spectral_clustering(
                 n_clusters=n_clusters,
                 n_component=n_component,
@@ -185,11 +185,11 @@ def build_results(
         cluster_label), "Contains duplicated genes, please check inputs."
     res = pd.Series(index=genes, data=cluster_label)
     cluster_properties["score"] = ch_score(before_cluster_df, res)
-    if ('error' in cluster_properties.keys()) and \
-        (cluster_properties["score"]*len(genes)/(2*cluster_properties["error"])<1e5):
-        print(
-            f"Getting Low score:{cluster_properties['score']} and High Error:{cluster_properties['error']}, \
-            try to set `n_clusters` more suitable.(larger may be better)")
+    # if ('error' in cluster_properties.keys()) and \
+    #     (cluster_properties["score"]*len(genes)/(2*cluster_properties["error"])<1e5):
+    #     print(
+    #         f"Getting Low score:{cluster_properties['score']} and High Error:{cluster_properties['error']}, \
+    #         try to set `n_clusters` more suitable.(larger may be better)")
     before_cluster_df = pd.DataFrame(before_cluster_df, index=genes)
     res = ClusterResult(
         cluster_res=res, df_exp=df_exp, df_pheno=pd.DataFrame(

@@ -1,0 +1,10 @@
+GSE100796:
+    DownloadLink: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE100796 
+    Ref: Xu, Chuan, Qian Li, Olga Efimova, Liu He, Shoji Tatsumoto, Vita Stepanova, Takao Oishi, et al. 2018. “Human-Specific Features of Spatial Gene Expression and Regulation in Eight Brain Regions.” Genome Research 28 (8): 1097–1110. https://doi.org/10.1101/gr.231357.117.
+
+scRNA:
+    DownloadLink: https://doi.org/10.5281/zenodo.3357167
+    Note: Use data under the folder "scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench"
+    Ref: 
+        Abdelaal, Tamim, Lieke Michielsen, Davy Cats, Dylan Hoogduin, Hailiang Mei, Marcel J. T. Reinders, and Ahmed Mahfouz. 2019. “A Comparison of Automatic Cell Identification Methods for Single-Cell RNA Sequencing Data.” Genome Biology 20 (1): 194. https://doi.org/10.1186/s13059-019-1795-z.
+        Ding, Jiarui, Xian Adiconis, Sean K. Simmons, Monika S. Kowalczyk, Cynthia C. Hession, Nemanja D. Marjanovic, Travis K. Hughes, et al. 2020. “Systematic Comparison of Single-Cell and Single-Nucleus RNA-Sequencing Methods.” Nature Biotechnology 38 (6): 737–46. https://doi.org/10.1038/s41587-020-0465-8.

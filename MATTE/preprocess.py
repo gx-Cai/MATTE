@@ -6,15 +6,17 @@ from sklearn.preprocessing import KernelCenterer
 from sklearn.feature_selection import f_classif
 from joblib.parallel import Parallel, delayed
 from sklearn.preprocessing import normalize, StandardScaler
-
+from scipy.spatial.distance import cdist
+from sklearn.decomposition import PCA
+from sklearn.metrics import pairwise_distances
 
 __all__ = ["RPKM2TPM", "log2transform", "exp_filter",
-           "Kernel_transform", "inputs_check", 'normalization']
+           "relative_diffdist", "inputs_check", 'normalization','relative_diff']
 
 ## --- Preprocess --- ##
 
 
-@kw_decorator('Checking_status')
+@kw_decorator('mixed_genes')
 def inputs_check(df_exp, df_pheno):
     """Checking inputs if they are correct. decorated by :func:`MATTE.utils.kw_decorator`
 
@@ -24,20 +26,13 @@ def inputs_check(df_exp, df_pheno):
     :type df_pheno: pandas.Series
     :raises ValueError: If the input dataframe is not correct.
     :return: checking status
-    :rtype: dict {`Checking_status`:'OK'}
+    :rtype: dict {`mixed_genes`:'OK'}
     """
     genes = df_exp.index
     samples = df_exp.columns
     phenoes = df_pheno.unique()
-
-    # check gene names and pheno names should not contains '@'
-    for i in genes:
-        if '@' in i:
-            raise ValueError(f"Gene name {i} contains '@'")
-    for i in phenoes:
-        if '@' in str(i):
-            raise ValueError(f"Pheno name {i} contains '@'")
-
+    if len(phenoes) >2:
+        raise NotImplementedError('Phenotypes over two is not implemented yet.')
     # check samples
     if len(samples) != len(set(samples)):
         raise ValueError("Samples should be unique.")
@@ -49,7 +44,9 @@ def inputs_check(df_exp, df_pheno):
         raise ValueError("Genes should be unique.")
 
     assert (df_exp >= 0).all().all(), "Expression contains negative values."
-    return 'OK'
+
+    return  pd.Series([f"{i}@{j}" for j in phenoes for i in genes])
+
 
 
 @kw_decorator(kw='df_exp')
@@ -133,6 +130,7 @@ def exp_filter(df_exp, df_pheno, gene_filter=None, filter_args: dict = {}):
         df_exp = df_exp[gene_filter(df_exp, df_pheno, **filter_args)]
     return df_exp
 
+
 ## --- Variable Generate  --- ##
 
 
@@ -160,7 +158,7 @@ def generate_df_exp_mixed(df_exp, df_pheno):
 
 ## --- Kernel Transformation --- ##
 
-def outer_subtract(x, absolute=False):
+def outer_subtract(x, absolute=True):
     """Outer subtract the mean of each gene.
 
     :param x: Expression data
@@ -175,93 +173,43 @@ def outer_subtract(x, absolute=False):
     else:
         return x[:, np.newaxis] - x[np.newaxis, :]
 
+def RDE_transform(data,pheno,absolute):
 
-def variant_rbf_kernel(x, gamma: float = 1.0):
-    """Variant RBF kernel.
+    data1 = data[pheno==pheno.unique()[0]]
+    data2 = data[pheno==pheno.unique()[1]]
 
-    :param x: Expression data
-    :type x: numpy.array
-    :param gamma: rbf kernel parameters, defaults to 1.0
-    :type gamma: float, optional
-    :return: RBF kernel matrix.
-    :rtype: numpy.array
-    """
-    assert x.shape[0] == x.shape[1]
-    return np.exp(-gamma * x ** 2)
+    mean_vect = np.array([data1.mean(axis=0),data2.mean(axis=0)]).reshape(-1)
 
+    return outer_subtract(mean_vect,absolute)
 
-def MKernel_Transform(MbyPheno, genes_mixed, absolute=True,):
-    """Mean Kernel transform.
+def decompdist(kmat,n_components=16):
+    pca = PCA(n_components=n_components)
+    tkmat = pca.fit_transform(kmat) 
+    tkmat1 = tkmat[0:kmat.shape[0]//2,:]
+    tkmat2 = tkmat[kmat.shape[0]//2:,:]
+    dist_mat = cdist(
+        tkmat1,tkmat2,
+        w=pca.explained_variance_ratio_)
+    return np.abs(dist_mat)
 
-    :param MbyPheno: Mean or median matrix calculated by pheno.
-    :type MbyPheno: pandas.DataFrame
-    :param genes_mixed: mixed genes.
-    :type genes_mixed: array like
-    :param absolute: whether to take absolute, defaults to True
-    :type absolute: bool, optional
-    :return: Mean Kernel transform matrix.
-    :rtype: numpy.array
-    """
-    mixed_genes_mean = MbyPheno.stack().reset_index()
-    mixed_genes_mean.index = [
-        f"{mixed_genes_mean.iloc[i,0]}@{mixed_genes_mean.iloc[i,1]}" for i in range(mixed_genes_mean.shape[0])]
-    mixed_genes_mean = mixed_genes_mean.iloc[:, -1].loc[genes_mixed]
-    return outer_subtract(mixed_genes_mean.values, absolute)
+def RDC_transform(data,pheno,centering_kernel,double_centering):
+    f_corr_mat = lambda data: KernelMat_transform(
+        1-np.abs(1-pairwise_distances(data.T,metric='correlation')),
+        centering_kernel,double_centering)
+    data1 = data[pheno==pheno.unique()[0]]
+    data2 = data[pheno==pheno.unique()[1]]
 
+    kmat1 = f_corr_mat(data1)
+    kmat2 = f_corr_mat(data2)
 
-def MrbfKernelTransform(MbyPheno, genes_mixed, gamma, absolute=True,):
-    """Mean RBF Kernel transform. Is a variant of rbf kernel. 
+    kmat = np.concatenate([kmat1,kmat2])
+    return kmat
 
-    :param MbyPheno: Mean or median matrix calculated by pheno.
-    :type MbyPheno: pandas.DataFrame
-    :param genes_mixed: mixed genes.
-    :type genes_mixed: array like
-    :param gamma: rbf kernel parameters, defaults to 1.0
-    :type gamma: float, optional
-    :param absolute: whether to take absolute in outer substract, defaults to True
-    :type absolute: bool, optional
-    :return: Mean RBF Kernel transform matrix.
-    :rtype: numpy.array
-    """
-    mixed_genes_mean = MbyPheno.stack().reset_index()
-    mixed_genes_mean.index = [
-        f"{mixed_genes_mean.iloc[i,0]}@{mixed_genes_mean.iloc[i,1]}" for i in range(mixed_genes_mean.shape[0])]
-    mixed_genes_mean = mixed_genes_mean.iloc[:, -1].loc[genes_mixed]
-    return variant_rbf_kernel(outer_subtract(mixed_genes_mean.values, absolute), gamma=gamma)
+def RDM_dist(mat1,mat2):
+    def z(mat):
+        return (mat-mat.mean())/mat.std()
+    return z(mat1)+z(mat2)
 
-
-def LocalrbfMKernelTransform(MbyPheno, genes_mixed, K=7, absolute=True):
-    """Local RBF Kernel transform. each genes' gamma is set to be its' distance to K-th nearest neighbor. 
-
-    :param MbyPheno: Mean or median matrix calculated by pheno.
-    :type MbyPheno: pandas.DataFrame
-    :param genes_mixed: mixed genes.
-    :type genes_mixed: array like
-    :param K: nearest neighbor, defaults to 7
-    :type K: int, optional
-    :param absolute: whether to take absolute or not, defaults to True
-    :type absolute: bool, optional
-    :return: Mean RBF Kernel transform matrix.
-    :rtype: numpy.array
-    """
-    mixed_genes_mean = MbyPheno.stack().reset_index()
-    mixed_genes_mean.index = [
-        f"{mixed_genes_mean.iloc[i,0]}@{mixed_genes_mean.iloc[i,1]}" for i in range(mixed_genes_mean.shape[0])]
-    mixed_genes_mean = mixed_genes_mean.iloc[:, -1].loc[genes_mixed]
-    mean_mat: np.array = outer_subtract(mixed_genes_mean.values, absolute)
-
-    # calculation K-th nearest neighbor's distance
-    sigmas = pd.Series(index=genes_mixed, dtype=float)
-    for i, g in enumerate(genes_mixed):
-        ind = mean_mat[i].argsort()[K]
-        sigmas[g] = mean_mat[i, ind]
-
-    for i in range(mean_mat.shape[0]):
-        for j in range(i+1, mean_mat.shape[1]):
-            gamma = -1/(sigmas[genes_mixed[i]] * sigmas[genes_mixed[j]])
-            mean_mat[i, j] = np.exp(gamma * mean_mat[i, j]**2)
-            mean_mat[j, i] = mean_mat[i, j]
-    return mean_mat
 
 # Used for any function between two vector
 
@@ -316,7 +264,7 @@ def cdist_generic(dataset1, dataset2, dist_fun, n_jobs=-1, verbose=0,
 
 ## --- Kernel Matrix Process --- ##
 
-def Double_Centering(x: np.array):
+def double_center(x: np.array):
     """Double Centering to Kernel Matrix
 
     :param x: Kernel matrix.
@@ -326,17 +274,25 @@ def Double_Centering(x: np.array):
     """
     return x - np.median(x, axis=0) - np.median(x, axis=1) + np.median(x)
 
+
+def KernelMat_transform(Mat,centering_kernel, double_centering):
+    if double_centering:
+        Mat = double_center(Mat)
+    if centering_kernel:
+        Mat = KernelCenterer().fit_transform(Mat)
+    return Mat
+
 ## --- Main of Kernel Transformation --- ##
 
 
-@kw_decorator(kw=['before_cluster_df', 'mixed_genes'])
-def Kernel_transform(
+@kw_decorator(kw='dist_mat')
+def relative_diffdist(
     df_exp, df_pheno, kernel_type,
     centering_kernel=True,
+    double_centering=False,
     outer_subtract_absolute=True,
-    double_centering=True,
+    n_components = 16,
     verbose=True,
-    kwargs={}
 ):
     """Kernel Transformation. Important preprocess to cross clustering. In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
 
@@ -344,7 +300,7 @@ def Kernel_transform(
     :type df_exp: pandas.DataFrame
     :param df_pheno: Phenotype dataframe.
     :type df_pheno: pandas.Series
-    :param kernel_type: Kernel type, one of the following: 'meanrbf','meanlocalrbf','mean','median','medianrbf','medianlocalrbf'. functions are also allowed.
+    :param kernel_type: Kernel type, one of the following: ['RDE','RDC','RDM']; functions are also allowed.
     :type kernel_type: str or function
     :param centering_kernel: whether to centering kernel, defaults to True
     :type centering_kernel: bool, optional
@@ -363,52 +319,75 @@ def Kernel_transform(
         printv(
             f"Calculating the kernel matrix using {kernel_type}", verbose=verbose)
 
-    genes = df_exp.index
-    samples = df_exp.columns
-    phenoes = df_pheno.unique()
-    genes_mixed = pd.Series(
-        [f"{i}@{j}" for j in phenoes for i in genes]
-    )
-    if type(kernel_type) == str:
-
-        if 'mean' in kernel_type:
-            MbyPheno = df_exp.groupby(df_pheno, axis=1).mean()
-        elif 'median' in kernel_type:
-            MbyPheno = df_exp.groupby(df_pheno, axis=1).median()
-
-        if kernel_type in ['meanrbf','medianrbf']:
-            gamma = kwargs.get('gamma', 2 / len(samples))
-            if type(gamma) == list:
-                assert len(gamma) == len(
-                    phenoes), "gamma should be a list of length equal to pheno if it is a list"
-            printv(f'Setting gamma to {gamma}', verbose=verbose)
-            Mat = MrbfKernelTransform(
-                MbyPheno, genes_mixed, gamma, outer_subtract_absolute)
-
-        elif kernel_type in ['mean','median']:
-            Mat = MKernel_Transform(
-                MbyPheno, genes_mixed, outer_subtract_absolute, )
-
-        elif kernel_type in ["meanlocalrbf", "medianlocalrbf"]:
-            K = kwargs.get('K', 7)
-            Mat = LocalrbfMKernelTransform(
-                MbyPheno, genes_mixed, K, outer_subtract_absolute)
+    if kernel_type == 'RDE':
+        Mat = RDE_transform(df_exp.T,df_pheno,outer_subtract_absolute)
+        Mat = KernelMat_transform(Mat,centering_kernel,double_centering)
     
-        else:
-            raise ValueError("The kernel type is not in the list.")
+    elif kernel_type == 'RDC':
+        Mat = RDC_transform(df_exp.T,df_pheno,centering_kernel,double_centering)
 
-
-    elif type(kernel_type) == function:
-        df_exp_mixed = generate_df_exp_mixed(
-            df_exp, df_pheno).loc[genes_mixed, :]
-        Mat = cdist_generic(df_exp_mixed.values, None, kernel_type)
+    elif kernel_type == 'RDM':
+        return RDM_dist(
+            relative_diffdist(df_exp,df_pheno,'RDE',centering_kernel,double_centering,outer_subtract_absolute,verbose),
+            relative_diffdist(df_exp,df_pheno,'RDC',centering_kernel,double_centering,outer_subtract_absolute,verbose)
+            )
 
     else:
         raise TypeError(f"kernel_type should be a string or a function, get {type(kernel_type)}")
 
-    if double_centering:
-        Mat = Double_Centering(Mat)
-    if centering_kernel:
-        Mat = KernelCenterer().fit_transform(Mat)
 
-    return Mat, genes_mixed
+    return decompdist(Mat,n_components)
+
+@kw_decorator(kw=['before_cluster_df','weight'])
+def relative_diff(
+    df_exp, df_pheno, kernel_type,
+    centering_kernel=True,
+    double_centering=False,
+    outer_subtract_absolute=True,
+    n_components = 16,
+    verbose=True,
+):
+    """Kernel Transformation. Important preprocess to cross clustering. In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
+
+    :param df_exp: Expression dataframe.
+    :type df_exp: pandas.DataFrame
+    :param df_pheno: Phenotype dataframe.
+    :type df_pheno: pandas.Series
+    :param kernel_type: Kernel type, one of the following: ['RDE','RDC','RDM']; functions are also allowed.
+    :type kernel_type: str or function
+    :param centering_kernel: whether to centering kernel, defaults to True
+    :type centering_kernel: bool, optional
+    :param outer_subtract_absolute: in outer subtract, use absolute or not, defaults to True
+    :type outer_subtract_absolute: bool, optional
+    :param double_centering: whether double centering kernel matrix or not, defaults to True
+    :type double_centering: bool, optional
+    :param verbose: defaults to True
+    :type verbose: bool, optional
+    :return: kernel matrix and mixed genes
+    :rtype: dict
+    :param kwargs: keyword arguments for kernel function.
+    :type kwargs: dict, optional
+    """
+    if verbose:
+        printv(
+            f"Calculating the kernel matrix using {kernel_type}", verbose=verbose)
+
+    if kernel_type == 'RDE':
+        Mat = RDE_transform(df_exp.T,df_pheno,outer_subtract_absolute)
+        Mat = KernelMat_transform(Mat,centering_kernel,double_centering)
+    
+    elif kernel_type == 'RDC':
+        Mat = RDC_transform(df_exp.T,df_pheno,centering_kernel,double_centering)
+
+    elif kernel_type == 'RDM':
+        Mat1,W1 = relative_diff(df_exp,df_pheno,'RDE',centering_kernel,double_center,outer_subtract_absolute,n_components,verbose).values()
+        Mat2,W2 = relative_diff(df_exp,df_pheno,'RDC',centering_kernel,double_center,outer_subtract_absolute,n_components,verbose).values()
+        return RDM_dist(Mat1,Mat2),np.array(W1.tolist()+W2.tolist())
+
+    else:
+        raise TypeError(f"kernel_type should be a string or a function, get {type(kernel_type)}")
+    pca = PCA(n_components=n_components)
+
+
+    return pca.fit_transform(Mat),pca.explained_variance_ratio_
+

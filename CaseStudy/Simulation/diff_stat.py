@@ -68,7 +68,7 @@ def ECF(data,pheno):
             res[i,j] = ecf(i,j)
 
     res = res + res.T
-    return res
+    return np.abs(res)
 
 def zscore(data,pheno,):
     l1,l2 = np.unique(pheno)
@@ -84,7 +84,7 @@ def zscore(data,pheno,):
     z = (z1-z2)/sqrt(1/(sum(pheno==l1)-3)) + 1/(sum(pheno==l2)-3)
     z[np.isnan(z)] = 0
     z[np.isinf(z)] = 0
-    return z
+    return np.abs(z)
 
 def DCE(data,pheno,beta=6):
     l1,l2 = np.unique(pheno)
@@ -107,7 +107,7 @@ def DCE(data,pheno,beta=6):
     T = 1 - T/(mins+1-D)
     T[np.diag_indices_from(T)] = 1
 
-    return 1-T
+    return np.abs(1-T)
 
 def entropy(data,pheno):
     l1,l2 = np.unique(pheno)
@@ -130,4 +130,4 @@ def entropy(data,pheno):
     ent = (I1 + I2)/2 - Iall
     ent[np.diag_indices_from(ent)] = 0
 
-    return ent
+    return np.abs(ent)
