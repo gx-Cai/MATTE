@@ -1,6 +1,11 @@
+try:
+    import sklearnex
+    sklearnex.patch_sklearn()
+except Exception:
+    print("Import sklearnex failed, highly recommend to use the package to speed up the process.")
+
 from .utils import printv, kw_decorator
 from .preprocess import *
-from sklearn.decomposition import PCA
 import dill as pickle
 import os
 import pandas as pd
@@ -8,11 +13,9 @@ import numpy as np
 import warnings
 from functools import wraps
 from .cluster import CrossCluster,build_results
-from itertools import combinations
-from tqdm import tqdm
 warnings.filterwarnings('ignore')
 
-__version__ = "1.2.0-dev2"
+__version__ = "1.2.0-dev3"
 __all__ = ["PipeFunc", "AlignPipe", 'preprocess_funcs_generate','GeneRanker']
 
 class PipeFunc():

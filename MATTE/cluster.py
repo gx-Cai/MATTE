@@ -52,7 +52,7 @@ class CrossCluster():
         """        
         def calling(data):
             model.fit(data,**calling_kwargs)
-            return getattr(model,model_attr)
+            return getattr(model,model_attr),{'method':str(model)}
         self.cluster_func = calling
     
     def __call__(self,before_cluster_df,**kwargs) -> dict:

@@ -5,12 +5,12 @@ from setuptools import setup,find_packages
 # os.system("pip3 install -r requirements.txt")
 
 requires_packages = [
-    "sklearn", "numpy", "biopython", "tqdm", "pandas", "scipy", "statsmodels",
+    "scikit-learn", "numpy", "biopython", "tqdm", "pandas", "scipy>=1.7.0", "statsmodels",
     "matplotlib","seaborn","joblib","dill"]
 
 setup(
     name = 'MATTE',
-    version = '1.2.0-dev2',
+    version = '1.2.0-dev3',
     packages = find_packages(),
     install_requires = requires_packages,
     url = 'https://github.com/gx-Cai/MATTE',
