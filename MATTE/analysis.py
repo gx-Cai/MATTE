@@ -7,8 +7,6 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 #-- models
-from sklearn.metrics import calinski_harabasz_score as ch_score
-from sklearn.metrics import davies_bouldin_score as db_score
 from sklearn.decomposition import PCA
 from scipy import stats
 from statsmodels.stats.multitest import fdrcorrection
@@ -238,7 +236,7 @@ class ClusterResult():
         if fig:
             f1 = self.Vis_Jmat()
             print("# --- samples' distribution:")
-            sf = self.SampleFeature(df_exp=self.df_exp)
+            sf = self.SampleFeature()
             f2 = Fig_SampleFeature(
                 sf, labels=self.pheno,
                 model=PCA(),metric="euclidean",
@@ -263,7 +261,8 @@ class ClusterResult():
         return f1
 
     # --- Cluster Score Calculation
-    def MCFeature(self, df_exp=None, module_genes=None, model=None):
+
+    def MCFeature(self, model=None):
         """calculation group features.using PCA for it reserving more information than others.
 
         .. note:: 
@@ -278,10 +277,8 @@ class ClusterResult():
         :return: group_feature: `dict`,keys : module id | values : eigenvector, group_weight: `dict`,keys : module id | values : lambda of model 
         :rtype: tuple
         """        
-        if df_exp is None:
-            df_exp = self.df_exp
-        if module_genes is None:
-            module_genes = self._module_genes()
+        df_exp = self.df_exp
+        module_genes = self.module_genes
 
         group_feature = {}
         group_weight = {}
@@ -300,48 +297,91 @@ class ClusterResult():
 
         return group_feature, group_weight
 
+    def MCCorrFeature(self, model=None):
+        """calculation group features.using PCA for it reserving more information than others.
+
+        :param model: model used to decomposition, defaults to None
+        :type model: object with fit and fit_transform, optional
+        :return: 
+        group_feature: `dict`,keys : module id | values : eigenvector, 
+        group_weight: `dict`,keys : module id | values : lambda of model
+        :rtype: tuple
+        """
+        df_exp = self.df_exp
+        df_pheno = self.pheno
+        module_genes = self.module_genes
+
+        def CorrInSample(x,y):
+            assert x.shape[0] == y.shape[0]
+            assert len(x.shape) == 1
+            assert len(y.shape) == 1
+            return (x-x.mean())*(y-y.mean())/(x.std()*y.std())
+        
+        def MCCorr(mc_genes):
+
+            corr1 = df_exp.loc[mc_genes, df_pheno==df_pheno.unique()[0]].T.corr()
+            corr2 = df_exp.loc[mc_genes, df_pheno==df_pheno.unique()[1]].T.corr()
+            corr = np.abs(corr1-corr2).values
+            corr[np.triu_indices_from(corr)] = 0
+            
+            res = []
+            idx1,idx2 = np.where(corr >= np.sort(corr[np.tril_indices_from(corr)])[::-1][len(mc_genes)-1])
+            for i,j in zip(idx1,idx2):
+                expri = df_exp.loc[mc_genes[i],:].values
+                exprj = df_exp.loc[mc_genes[j],:].values
+                res.append(CorrInSample(expri,exprj))
+            return np.array(res).T # n_samples,n_genepair
+        
+        group_feature = {}
+        group_weight = {}
+        for mc, genes in module_genes.items():
+            if len(genes) <= 2:
+                continue
+            pca = PCA(n_components=1) if model is None else model
+            feature = pca.fit_transform(MCCorr(genes))
+            all_explained = 0
+            for ind, ratio in enumerate(pca.explained_variance_ratio_):
+                all_explained += ratio
+                if all_explained >= 0.8:
+                    break
+
+            group_feature[mc] = feature[:, 0:ind+1]
+            group_weight[mc] = pca.explained_variance_ratio_[:ind+1]
+
+        return group_feature, group_weight
+
     # --- Samples' feature and phenotype's signature.
 
-    def SampleFeature(self, df_exp=None, module_genes=None, return_df=True, **kwargs):
+    def SampleFeature(self, corr=False, **kwargs):
         """Calculate Samples' module feature.(average default)
 
-        :param df_exp: defaults to None, :attr:`ClusterResult.df_exp`
-        :type df_exp: pd.DataFrame, optional
-        :param module_genes: the mapping of module and genes. defaults to None, result of function :func:`MATTE.analysis.ClusterResult._module_genes`, 
-        :type module_genes: dict, optional
-        :param return_df: decide return. If False, then will store result in :attr:`ClusterResult.samples_feature`, defaults to True
-        :type return_df: bool, optional
+        :param corr: if True, calculate correlation between samples, defaults to False
+        :type corr: bool, optional
         :return: depended by the arg:return_df
         :rtype: samples_feature is a `WeightedDataFrame` object, whose index is samples id and columns is module id. Module Weights are calculated by function `MCFeature`.
         """        
-        if df_exp is None:
-            df_exp = self.df_exp
+        df_exp = self.df_exp
+        module_genes = self.module_genes
+        group_feature, group_weight = self.MCCorrFeature(**kwargs) if corr else self.MCFeature(**kwargs)
 
-        def lst_sum(lst):
-            ret = []
-            for l in lst:
-                ret.extend(l)
-            return ret
-
-        module_genes = self._module_genes() if module_genes is None else module_genes
-        group_feature, group_weight = self.MCFeature(
-            df_exp=df_exp, module_genes=module_genes, **kwargs)
         samples_feature = WeightedDataFrame(
             index=df_exp.columns, data=np.hstack(
                 tuple(group_feature.values())),
-            columns=lst_sum(
+            columns=
                 [
-                    [i+"_"+str(_)] for i in group_feature.keys()
-                    for _ in range(group_feature[i].shape[1])]),
+                    i 
+                    for j in [
+                        [f"{mc}_{n}"] for mc in group_feature.keys() 
+                        for n in range(group_feature[mc].shape[1])] 
+                    for i in j
+                ],
+
             weight=np.hstack(list(group_weight.values()))
         )
 
-        if return_df:
-            return samples_feature
-        else:
-            self.samples_feature = samples_feature
+        return samples_feature
 
-    def PhenoMCCorr(self, sample_feature, pheno_series, pheno=None):
+    def PhenoMCCorr(self, sample_feature, pheno_series=None, pheno=None):
         """Calculate the correlation between Phenotype and MC's Eigenvector and test the correlation and return p-value
 
         :param sample_feature: can be calculated by the function :func:`ClusterResult.SampleFeature`
@@ -356,6 +396,8 @@ class ClusterResult():
         def covPvalueStudent(cor, n_samples):
             T = (n_samples - 2)**0.5 * cor/((1-cor**2)**0.5)
             return 2*stats.t.sf(abs(T), n_samples-2)
+        if pheno_series is None:
+            pheno_series = self.pheno
 
         if pheno is None:
             pheno = pheno_series.unique()[0]

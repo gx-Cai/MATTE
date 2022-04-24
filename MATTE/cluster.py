@@ -3,11 +3,11 @@ import pandas as pd
 from Bio.Cluster import kcluster
 from sklearn.cluster import spectral_clustering, SpectralBiclustering
 from sklearn.metrics import calinski_harabasz_score as ch_score
-from sklearn.model_selection import KFold
 from .analysis import ClusterResult, affinity_matrix
 from .utils import *
+from scipy.spatial.distance import cdist
 
-__all__ = ['CrossCluster','build_results']
+__all__ = ['CrossCluster','build_results','Cross_Distance']
 
 class CrossCluster():
     """Cross clustering of mixed expression matrix.
@@ -70,12 +70,12 @@ class CrossCluster():
 
         if self.use_aff:
             dist_type = kwargs.get("dist_type", "e")
-            weight = kwargs.get("weight", [1]*before_cluster_df.shape[1])
+            weights = kwargs.get("weights", [1]*before_cluster_df.shape[1])
 
             printv("Using affinity matrix will cost more time and meomory.",verbose=self.kwargs.get('verbose',True))
             if dist_type not in ["a", "x", "cosine", "correlation"]:
                 print("Affinity is not distance, make sure your distance type is true.(Correlation-like should be used, like 'a','x','cosine','correlation'). Or it will cost much time and get no result.")
-            before_cluster_df = affinity_matrix(data=before_cluster_df, dist_type=dist_type, type="affinity", weight=weight)
+            before_cluster_df = affinity_matrix(data=before_cluster_df, dist_type=dist_type, type="affinity", weights=weights)
 
         labels,properties = self.cluster_func(before_cluster_df,**kwargs)
         self.properties.update(properties)
@@ -111,15 +111,15 @@ class CrossCluster():
         """        
         def kcluster_calling(data,**kwargs):
             method = kwargs.get("method", "a")
-            dist_type = kwargs.get("dist_type", "e")
-            weight = kwargs.get("weight", [1]*data.shape[1])
+            dist_type = kwargs.get("dist_type", "a")
+            weights = kwargs.get("weights", [1]*data.shape[1])
             n_clusters = kwargs.get("n_clusters", 8)
             npass = kwargs.get("npass", 20)
             label, error, nfound = kcluster(
                 data=data, method=method,
-                nclusters=n_clusters, weight=weight,
+                nclusters=n_clusters, weight=weights,
                 npass=npass, dist=dist_type)
-            return label,{'error':error,'method':f'kmeans_{method}','dist_type':dist_type,'n_clusters':n_clusters,'npass':npass}
+            return label,{'error':error/data.shape[0],'method':f'kmeans_{method}','dist_type':dist_type,'n_clusters':n_clusters,'npass':npass}
         self.build_from_func(kcluster_calling)
 
     def preset_spectrum(self,):
@@ -152,10 +152,36 @@ class CrossCluster():
         self.use_aff = True
         self.build_from_func(spectral_bicluster_calling)
 
+@kw_decorator(kw="Result")
+def Cross_Distance(before_cluster_df,metric='euclidean',weights=None,kwargs={},verbose=True):
+    """calculate the distance between each cluster and other cluster
+
+    :param before_cluster_df: dataframe to cluster
+    :type before_cluster_df: pandas.DataFrame or np.array
+    :param metric: distance metric(implemented by scipy package,more information can be found in scipy's documention), defaults to 'euclidean'
+    :type metric: str, optional
+    :param weights: weights in calculate distance, defaults to None
+    :type weights: array-like, optional
+    :param kwargs: other key words args passed to cdist function, defaults to {}
+    :type kwargs: dict, optional
+    :param verbose: defaults to True
+    :type verbose: bool, optional
+    :return: distance matrix
+    :rtype: `numpy.array`
+    """
+    printv("Calculate distance matrix...",verbose=verbose)
+    n_genes2,n_features = before_cluster_df.shape
+    assert n_genes2%2==0
+    n_genes = n_genes2//2
+    return cdist(
+        before_cluster_df[0:n_genes,:],before_cluster_df[n_genes:,:],
+        metric=metric,
+        w = weights,**kwargs)
+
 
 @kw_decorator(kw="Result")
 def build_results(
-        cluster_label, mixed_genes, cluster_properties, df_exp, df_pheno,
+        cluster_label, cluster_properties, df_exp, df_pheno,
         before_cluster_df, order_rule="input", verbose=True):
     """building results of :class:`CrossCluster` to :class:`MATTE.analysis.ClusterResult`
     **decorated by :func:`MATTE.utils.kwdecorator`**
@@ -180,9 +206,11 @@ def build_results(
     :rtype: :class:`MATTE.analysis.ClusterResult`
     """    
     printv("building cluster results", verbose=verbose)
-    genes = mixed_genes
-    assert len(genes) == len(
-        cluster_label), "Contains duplicated genes, please check inputs."
+    genes_sep = df_exp.index
+    samples = df_exp.columns
+    phenoes = df_pheno.unique()
+    genes = pd.Series([f"{i}@{j}" for j in phenoes for i in genes_sep])
+    assert len(genes) == len(cluster_label), f"mixing genes {len(genes)} is not consistance with cluster label {len(cluster_label)}"
     res = pd.Series(index=genes, data=cluster_label)
     cluster_properties["score"] = ch_score(before_cluster_df, res)
     # if ('error' in cluster_properties.keys()) and \

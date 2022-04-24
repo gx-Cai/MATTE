@@ -6,18 +6,15 @@ from sklearn.preprocessing import KernelCenterer
 from sklearn.feature_selection import f_classif
 from joblib.parallel import Parallel, delayed
 from sklearn.preprocessing import normalize, StandardScaler
-from scipy.spatial.distance import cdist
-from sklearn.decomposition import PCA
 from sklearn.metrics import pairwise_distances
 
-__all__ = ["RPKM2TPM", "log2transform", "exp_filter",
-           "relative_diffdist", "inputs_check", 'normalization','relative_diff']
+__all__ = ["RPKM2TPM", "log2transform", "expr_filter",
+            "inputs_check", 'normalization','Kernel_Transform','RDC_Transform','RDE_Transform']
 
 ## --- Preprocess --- ##
 
 
-@kw_decorator('mixed_genes')
-def inputs_check(df_exp, df_pheno):
+def inputs_check(df_exp, df_pheno,**kwargs):
     """Checking inputs if they are correct. decorated by :func:`MATTE.utils.kw_decorator`
 
     :param df_exp: Expression dataframe.
@@ -31,6 +28,7 @@ def inputs_check(df_exp, df_pheno):
     genes = df_exp.index
     samples = df_exp.columns
     phenoes = df_pheno.unique()
+
     if len(phenoes) >2:
         raise NotImplementedError('Phenotypes over two is not implemented yet.')
     # check samples
@@ -44,10 +42,7 @@ def inputs_check(df_exp, df_pheno):
         raise ValueError("Genes should be unique.")
 
     assert (df_exp >= 0).all().all(), "Expression contains negative values."
-
-    return  pd.Series([f"{i}@{j}" for j in phenoes for i in genes])
-
-
+    return {'valid_genes':len(genes),'valid_samples':len(samples)}
 
 @kw_decorator(kw='df_exp')
 def RPKM2TPM(df_exp):
@@ -106,7 +101,7 @@ def normalization(df_exp, norm='l1'):
 
 
 @kw_decorator(kw='df_exp')
-def exp_filter(df_exp, df_pheno, gene_filter=None, filter_args: dict = {}):
+def expr_filter(df_exp, df_pheno, gene_filter=None, filter_args: dict = {}):
     """Filter the genes by rule. decorated by :func:`MATTE.utils.kw_decorator`
 
     :param df_exp: Expression dataframe.
@@ -173,45 +168,7 @@ def outer_subtract(x, absolute=True):
     else:
         return x[:, np.newaxis] - x[np.newaxis, :]
 
-def RDE_transform(data,pheno,absolute):
-    """Transform the data by RDE(Relative Differentila Expression)
-
-    :param data: inputs data with rows as samples and columns as genes.
-    :type data: pd.DataFrame
-    :param pheno: phenotype data corresponding to expression data.
-    :type pheno: pd.Series
-    :param absolute: whether after substract to take absolute, defaults to False
-    :type absolute: bool
-    :return: transformed data.
-    :rtype: pd.DataFrame
-    """
-    data1 = data[pheno==pheno.unique()[0]]
-    data2 = data[pheno==pheno.unique()[1]]
-
-    mean_vect = np.array([data1.mean(axis=0),data2.mean(axis=0)]).reshape(-1)
-
-    return outer_subtract(mean_vect,absolute)
-
-def decompdist(kmat,n_components=16):
-    """calculate the distance(after decomposition)
-
-    :param kmat: kernel matrix 
-    :type kmat: numpy.array
-    :param n_components: number of components used in decomposition, defaults to 16
-    :type n_components: int, optional
-    :return: distance matrix
-    :rtype: numpy.array
-    """    """"""
-    pca = PCA(n_components=n_components)
-    tkmat = pca.fit_transform(kmat) 
-    tkmat1 = tkmat[0:kmat.shape[0]//2,:]
-    tkmat2 = tkmat[kmat.shape[0]//2:,:]
-    dist_mat = cdist(
-        tkmat1,tkmat2,
-        w=pca.explained_variance_ratio_)
-    return np.abs(dist_mat)
-
-def RDC_transform(data,pheno,centering_kernel,double_centering):
+def RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering):
     """Transform the data by RDC(Relative Distance Correlation)
 
     :param data: inputs data with rows as samples and columns as genes.
@@ -224,12 +181,13 @@ def RDC_transform(data,pheno,centering_kernel,double_centering):
     :type double_centering: bool
     :return: transformed data.
     :rtype: numpy.array
-    """    """"""
-    f_corr_mat = lambda data: KernelMat_transform(
+    """
+    data = df_exp.T
+    f_corr_mat = lambda data: __Kernel_centering(
         1-np.abs(1-pairwise_distances(data.T,metric='correlation')),
         centering_kernel,double_centering)
-    data1 = data[pheno==pheno.unique()[0]]
-    data2 = data[pheno==pheno.unique()[1]]
+    data1 = data[df_pheno==df_pheno.unique()[0]]
+    data2 = data[df_pheno==df_pheno.unique()[1]]
 
     kmat1 = f_corr_mat(data1.values)
     kmat2 = f_corr_mat(data2.values)
@@ -237,6 +195,31 @@ def RDC_transform(data,pheno,centering_kernel,double_centering):
     kmat = np.concatenate([kmat1,kmat2])
     return kmat
 
+def RDE_Transform(df_exp, df_pheno, kernel_type, absolute=True,):
+    """Mean Kernel transform.
+
+    :param MbyPheno: Mean or median matrix calculated by pheno.
+    :type MbyPheno: pandas.DataFrame
+    :param genes_mixed: mixed genes.
+    :type absolute: bool, optional
+    :return: Mean Kernel transform matrix.
+    :rtype: numpy.array
+    """
+    if 'mean' in kernel_type:
+        MbyPheno = df_exp.groupby(df_pheno, axis=1).mean()
+    elif 'median' in kernel_type:
+        MbyPheno = df_exp.groupby(df_pheno, axis=1).median()
+    
+    genes = df_exp.index
+    phenoes = df_pheno.unique()
+    genes_mixed = pd.Series([f"{i}@{j}" for j in phenoes for i in genes])
+
+    mixed_genes_mean = MbyPheno.stack().reset_index()
+    mixed_genes_mean.index = [
+        f"{mixed_genes_mean.iloc[i,0]}@{mixed_genes_mean.iloc[i,1]}" for i in range(mixed_genes_mean.shape[0])]
+    mixed_genes_mean = mixed_genes_mean.iloc[:, -1].loc[genes_mixed]
+
+    return outer_subtract(mixed_genes_mean.values, absolute)
 
 # Used for any function between two vector
 
@@ -301,19 +284,7 @@ def double_center(x: np.array):
     """
     return x - np.median(x, axis=0) - np.median(x, axis=1) + np.median(x)
 
-
-def KernelMat_transform(Mat,centering_kernel, double_centering):
-    """Transform the kernel matrix
-
-    :param Mat: Kernel matrix.
-    :type Mat: np.array
-    :param centering_kernel: Whether to center the kernel matrix
-    :type centering_kernel: bool
-    :param double_centering: Whether to double center the kernel matrix
-    :type double_centering: bool
-    :return: transformed kernel matrix
-    :rtype: np.array
-    """    """"""
+def __Kernel_centering(Mat, centering_kernel, double_centering, ):
     if double_centering:
         Mat = double_center(Mat)
     if centering_kernel:
@@ -323,83 +294,12 @@ def KernelMat_transform(Mat,centering_kernel, double_centering):
 ## --- Main of Kernel Transformation --- ##
 
 
-@kw_decorator(kw='dist_mat')
-def relative_diffdist(
+@kw_decorator(kw='before_cluster_df')
+def Kernel_Transform(
     df_exp, df_pheno, kernel_type,
     centering_kernel=True,
-    double_centering=False,
     outer_subtract_absolute=True,
-    n_components = 16,
-    verbose=True,
-):
-    """Calculate the relative difference distance.
-    In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
-
-    :param df_exp: Expression dataframe.
-    :type df_exp: pandas.DataFrame
-    :param df_pheno: Phenotype dataframe.
-    :type df_pheno: pandas.Series
-    :param kernel_type: Kernel type, one of the following: ['RDE','RDC','RDM']; functions are also allowed.
-    :type kernel_type: str or function
-    :param centering_kernel: whether to centering kernel, defaults to False
-    :type centering_kernel: bool, optional
-    :param outer_subtract_absolute: in outer subtract, use absolute or not, defaults to False
-    :type outer_subtract_absolute: bool, optional
-    :param double_centering: whether double centering kernel matrix or not, defaults to False
-    :type double_centering: bool, optional
-    :param verbose: defaults to True
-    :type verbose: bool, optional
-    :return: distance matrix (key is 'dist_mat')
-    :rtype: dict
-    """
-    printv(
-        f"Calculating the kernel matrix using {kernel_type}", verbose=verbose)
-
-    if kernel_type == 'RDE':
-        Mat = RDE_transform(df_exp.T,df_pheno,outer_subtract_absolute)
-        printv("Finish kernel matrix calculation. Transfer the kernel matrix.", verbose=verbose)
-        Mat = KernelMat_transform(Mat,centering_kernel,double_centering)
-    
-    elif kernel_type == 'RDC':
-        Mat = RDC_transform(df_exp.T,df_pheno,centering_kernel,double_centering)
-        printv("Finish kernel matrix calculation.", verbose=verbose)
-
-    elif kernel_type == 'RDM':
-        def RDM_dist(mat1,mat2):
-            z = lambda d: (d - d.mean())/d.std()
-            return z(mat1) + z(mat2)
-        return RDM_dist(
-            relative_diffdist(
-                df_exp = df_exp,df_pheno = df_pheno,
-                kernel_type='RDE',
-                centering_kernel = centering_kernel,
-                double_centering= double_centering,
-                outer_subtract_absolute= outer_subtract_absolute,
-                n_components= n_components,
-                verbose = verbose)['dist_mat'],
-            relative_diffdist(
-                df_exp = df_exp,df_pheno = df_pheno,
-                kernel_type='RDC',
-                centering_kernel = centering_kernel,
-                double_centering= double_centering,
-                outer_subtract_absolute= outer_subtract_absolute,
-                n_components= n_components,
-                verbose = verbose)['dist_mat'],
-            )
-
-    else:
-        raise TypeError(f"kernel_type should be a string or a function, get {type(kernel_type)}")
-
-    printv("Calculation Distance..", verbose=verbose)
-    return decompdist(Mat,n_components)
-
-@kw_decorator(kw=['before_cluster_df','weight'])
-def relative_diff(
-    df_exp, df_pheno, kernel_type,
-    centering_kernel=False,
-    double_centering=False,
-    outer_subtract_absolute=False,
-    n_components = 16,
+    double_centering=True,
     verbose=True,
 ):
     """Kernel Transformation. Important preprocess to cross clustering. In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
@@ -408,54 +308,54 @@ def relative_diff(
     :type df_exp: pandas.DataFrame
     :param df_pheno: Phenotype dataframe.
     :type df_pheno: pandas.Series
-    :param kernel_type: Kernel type, one of the following: ['RDE','RDC','RDM']; functions are also allowed.
+    :param kernel_type: Kernel type, one of the following:
+    'mean','median','corr','merged' 
+    functions are also allowed.
     :type kernel_type: str or function
-    :param centering_kernel: whether to centering kernel, defaults to False
+    :param centering_kernel: whether to centering kernel, defaults to True
     :type centering_kernel: bool, optional
-    :param outer_subtract_absolute: in outer subtract, use absolute or not, defaults to False
+    :param outer_subtract_absolute: in outer subtract, use absolute or not, defaults to True
     :type outer_subtract_absolute: bool, optional
-    :param double_centering: whether double centering kernel matrix or not, defaults to False
+    :param double_centering: whether double centering kernel matrix or not, defaults to True
     :type double_centering: bool, optional
     :param verbose: defaults to True
     :type verbose: bool, optional
-    :return: kernel matrix and weight
+    :return: kernel matrix and mixed genes
     :rtype: dict
     """
-    if verbose:
-        printv(
-            f"Calculating the kernel matrix using {kernel_type}", verbose=verbose)
 
-    if kernel_type == 'RDE':
-        Mat = RDE_transform(df_exp.T,df_pheno,outer_subtract_absolute)
-        Mat = KernelMat_transform(Mat,centering_kernel,double_centering)
-    
-    elif kernel_type == 'RDC':
-        Mat = RDC_transform(df_exp.T,df_pheno,centering_kernel,double_centering)
+    printv(f"Calculating the kernel matrix using {kernel_type}", verbose=verbose)
 
-    elif kernel_type == 'RDM':
-        z = lambda d: (d - d.mean())/d.std()
-        Mat1,W1 = relative_diff(
-                df_exp = df_exp,df_pheno = df_pheno,
-                kernel_type='RDE',
-                centering_kernel = centering_kernel,
-                double_centering= double_centering,
-                outer_subtract_absolute= outer_subtract_absolute,
-                n_components= n_components,
-                verbose = verbose).values()
-        Mat2,W2 = relative_diff(
-                df_exp = df_exp,df_pheno = df_pheno,
-                kernel_type='RDC',
-                centering_kernel = centering_kernel,
-                double_centering= double_centering,
-                outer_subtract_absolute= outer_subtract_absolute,
-                n_components= n_components,
-                verbose = verbose).values()
-        return np.concatenate([z(Mat1),z(Mat2)],axis=1),np.array(W1.tolist()+W2.tolist())
+    if type(kernel_type) == str:
+
+        if kernel_type in ['mean','median']:
+            Mat = RDE_Transform(
+                df_exp, df_pheno, kernel_type, outer_subtract_absolute, )
+
+            __Kernel_centering(Mat, centering_kernel, double_centering)
+        
+        elif kernel_type in ['corr']:
+            Mat = RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering)
+        
+        elif kernel_type in ['merged']:
+            # FIXME #
+            z = lambda x: (x - x.mean())/x.std()
+            Mat1 = RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering)
+            Mat2 = RDE_Transform(df_exp, df_pheno, 'mean', outer_subtract_absolute,)
+            __Kernel_centering(Mat2, centering_kernel, double_centering)
+            Mat = np.concatenate((z(Mat1),z(Mat2)),axis=1)
+        
+        else:
+            raise ValueError("The kernel type is not in the list.")
+
+    elif type(kernel_type) == function:
+        df_exp_mixed = generate_df_exp_mixed(
+            df_exp, df_pheno)
+        Mat = cdist_generic(df_exp_mixed.values, None, kernel_type)
 
     else:
         raise TypeError(f"kernel_type should be a string or a function, get {type(kernel_type)}")
-    pca = PCA(n_components=n_components)
 
+    return Mat
 
-    return pca.fit_transform(Mat),pca.explained_variance_ratio_
 
