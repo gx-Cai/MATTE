@@ -22,7 +22,7 @@ from sklearn.decomposition import PCA
 
 warnings.filterwarnings('ignore')
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __all__ = ["PipeFunc", "AlignPipe",'GeneRanker','merged_pipeline_clustering']
 
 class PipeFunc():
@@ -89,7 +89,6 @@ class PipeFunc():
         else:
             return str(arg)
 
-
 class AlignPipe():
     """Basic class in MATTE. Stores a list of functions or transformers.
     One can see the pipeline in :func:`__str__`
@@ -100,20 +99,21 @@ class AlignPipe():
         Use :func:`MATTE.AlignPipe.add_step` to add a function to :attr:`funcs`, but can change order or delete some functions like `list`.
     
     """    
-    def __init__(self, init='cluster') -> None:
+    def __init__(self, stats_type='mean', target='cluster',preprocess=True) -> None:
         """Initialize a AlignPipe object.
 
-        :param init: weather to set up to default pipeline or not, defaults to True
-        :type init: bool, optional
+        :param stats_type: the type of statistics used to calculate the distance between two clusters, defaults to 'mean',should be one of the following: 'mean','median','corr'
+        :type stats_type: str, optional
+        :param target: the target of clustering, defaults to 'cluster',should be one of the following: 'cluster','distance'
+        :type target: str, optional
+        :param preprocess: whether to preprocess the data, defaults to True
+        :type preprocess: bool, optional
         """        
         self.funcs = []
         self.cluster_func = []
-        if init == "cluster":
-            self.default_pipeline()
-        elif init == "distance":
-            self.default_distance()
-        else:
-            raise ValueError("init should be 'cluster' or 'distance'")
+        self.init_pipeline(stats_type,target,preprocess)
+        if stats_type not in ['mean','median','corr'] or target not in ['cluster','distance']:
+            raise ValueError("init parameters wrong: stats should be one of 'mean','median','corr' and target should be in 'cluster' or 'distance'")
         
     def __str__(self) -> str:
         """str is a string that shows the pipeline.
@@ -251,13 +251,6 @@ class AlignPipe():
         """        
         self.cluster_func.append(PipeFunc(func=func, *setting, **kwsetting))
 
-    def sub_pipe(self, funcs_index, cluster_methods_index):
-
-        new_pipe = AlignPipe(init=False)
-        new_pipe.funcs = self.funcs[funcs_index]
-        new_pipe.cluster_func = self.cluster_func[cluster_methods_index]
-        return new_pipe
-
     def calculate(self, df_exp, df_pheno, verbose=True):
         """Calculate the data using the pipeline.
 
@@ -270,7 +263,6 @@ class AlignPipe():
         :return: clustering results
         :rtype: :class:`MATTE.analysis.ClusterResult`
         """
-        self.check_params_setting()
         tmpt_result = self.__cal_temp(
             df_exp, df_pheno, verbose=verbose, saving_temp=False)
 
@@ -312,70 +304,45 @@ class AlignPipe():
             None,
         )
 
-    def default_pipeline(self):
-        """Get the default pipeline.
+    def init_pipeline(self,stats_type,target,preprocess:bool):
+        """Initialize the pipeline.
 
-        :return: default pipeline
-        :rtype: :class:`AlignPipe`
-
-        .. note:: default pipeline contrains **preprocessing**, and if data is preprocessed, delete it.
-        
-        see default pipeline, run code below to see the result. 
-
-        .. code-block:: python
-
-            import MATTE
-            print(MATTE.AlignPipe())
-
-        """        
-
-        self.add_step(inputs_check)
-        self.add_step(RPKM2TPM)
-        self.add_step(log2transform)
-        self.add_step(expr_filter, gene_filter=None)
-        self.add_step(
-            Kernel_Transform,
-            kernel_type="mean", centering_kernel=True,
-            outer_subtract_absolute=True, double_centering=True
-        )
-        self.add_transformer(
-            PCA(n_components=16))
-
-        self.set_cluster_method(
-            func=CrossCluster(),
-            preset='kmeans',n_clusters=8, method="a", dist_type="a",n_iters=20
-        )
-        self.set_cluster_method(func=build_results)
-
-        return self
-
-    def default_distance(self):
-        """default distance pipeline.
-
-        :return: default distance pipeline
-        :rtype: :class:`AlignPipe`
+        :param stats_type: type of statistics
+        :type stats_type: str
+        :param target: target name
+        :type target: str
+        :param preprocess: whether to preprocess the data
+        :type preprocess: bool
         """
-        self.add_step(inputs_check)
-        self.add_step(RPKM2TPM)
-        self.add_step(log2transform)
-        self.add_step(expr_filter, gene_filter=None)
-        self.add_step(
-            Kernel_Transform,
-            kernel_type="mean", centering_kernel=True,
-            outer_subtract_absolute=True, double_centering=False
-        )
-        self.add_transformer(
-            PCA(n_components=16))
+        if preprocess:
+            self.add_step(inputs_check)
+            self.add_step(RPKM2TPM)
+            self.add_step(log2transform)
+            self.add_step(expr_filter, gene_filter=None)
+        
+        if stats_type !='corr':
+            self.add_step(
+                LocKernel_Transform,
+                kernel_type=stats_type, centering_kernel=True,
+                outer_subtract_absolute=True, double_centering=True
+            )
 
-        @kw_decorator(kw='weights')
-        def adding_weights():
-            return self.get_attribute_from_transformer('explained_variance_')
+            self.add_transformer(
+                PCA(n_components=16))
 
-        self.add_step(
-            func=adding_weights)
+        else:
+            self.add_step(
+                CorrKernel_Transform,n_components=16,
+            )
 
-        self.add_step(Cross_Distance,metric='euclidean')
-        return self
+        if target == 'cluster':
+            self.set_cluster_method(
+                func=CrossCluster(),
+                preset='kmeans',n_clusters=8, method="a", dist_type="a",n_iters=20
+            )
+            self.set_cluster_method(func=build_results)
+        else:
+            self.add_step(Cross_Distance,metric='euclidean')
 
     def find_best_KernelTrans_params(
         self,df_exp,df_pheno,
@@ -414,7 +381,7 @@ class AlignPipe():
         for i_funcs,f in enumerate(self.funcs):
             if (type(f) == PipeFunc) and (f.__name__ == 'Kernel_Transform'):
                 break
-        
+        i_funcs -= 1
         # setup configs/searching space.
         if self.funcs[i_funcs].kwargs['kernel_type'] == 'corr':
             configs = [
@@ -454,28 +421,6 @@ class AlignPipe():
             best_config.pop('error')
             return best_config
 
-    def check_params_setting(self):
-        """check if the parameters are set corresponding to recommend.
-        """
-        if (len(self.funcs)==0) or (len(self.cluster_func)==0):
-            return
-        for i_funcs,f in enumerate(self.funcs):
-            if (type(f) == PipeFunc) and (f.__name__ == 'Kernel_Transform'):
-                break
-        osa = self.funcs[i_funcs].kwargs.get('outer_subtract_absolute',True)
-        cka = self.funcs[i_funcs].kwargs.get('centering_kernel',True)
-        dca = self.funcs[i_funcs].kwargs.get('double_centering',True)
-        
-        for i_cluster,f in enumerate(self.cluster_func):
-            if (type(f) == PipeFunc) and (f.__name__ == 'CrossCluster'):
-                break
-        if self.cluster_func[i_cluster].kwargs.get('dist_type','a') == 'e':
-            if not(osa and cka and (not dca)):
-                print(f"recommend parameters when dist_type='e': outer_subtract_absolute=True, centering_kernel=True, double_centering=False,now get {osa},{cka},{dca}")
-        elif self.cluster_func[i_cluster].kwargs.get('dist_type','a')  == 'a':
-            if not(osa and cka and dca):
-                print(f"recommend parameters when dist_type='a': outer_subtract_absolute=True, centering_kernel=True, double_centering=True,now get {osa},{cka},{dca}")
-
 class GeneRanker():
     """MATTE GeneRanker.
 
@@ -506,13 +451,11 @@ class GeneRanker():
         if self.view in ['module','gene']:
             self.pipeline = AlignPipe() if pipeline is None else pipeline
         elif self.view in ['dist']:
-            self.pipeline = AlignPipe(init='distance') if pipeline is None else pipeline
+            self.pipeline = AlignPipe(target='distance') if pipeline is None else pipeline
         elif self.view in ['cross-view']:
             if pipeline is None:
-                pipeline1 = AlignPipe(init='distance')
-                pipeline1.funcs[4].add_params(kernel_type='mean')
-                pipeline2 = AlignPipe(init='distance')
-                pipeline2.funcs[4].add_params(kernel_type='corr')
+                pipeline1 = AlignPipe(target='distance',stats_type='mean')
+                pipeline2 = AlignPipe(target='distance',stats_type='corr')
                 self.pipeline = [pipeline1,pipeline2]
             else:
                 assert len(self.pipeline) == 2, "pipeline should be a list of two pipelines in cross-distance."
@@ -675,10 +618,11 @@ def merged_pipeline_clustering(df_exp:pd.DataFrame,df_pheno:pd.Series,pipelines:
     :rtype: :class:`MATTE.analysis.ClusterResult`
     """
     data_name = 'before_cluster_df'
+    z = lambda x: (x - x.mean()) / x.std()
     dfs = []
     for pipeline in pipelines:
         results:dict = pipeline._AlignPipe__cal_temp(df_exp,df_pheno,verbose=verbose)
-        dfs.append(results[data_name])
+        dfs.append(z(results[data_name]))
 
     before_cluster_df = np.concatenate(dfs,axis=1)
     results.update({data_name:before_cluster_df,})

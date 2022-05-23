@@ -8,8 +8,8 @@ from joblib.parallel import Parallel, delayed
 from sklearn.preprocessing import normalize, StandardScaler
 from sklearn.metrics import pairwise_distances
 
-__all__ = ["RPKM2TPM", "log2transform", "expr_filter",
-            "inputs_check", 'normalization','Kernel_Transform','RDC_Transform','RDE_Transform']
+__all__ = ["RPKM2TPM", "log2transform", "expr_filter",'CorrKernel_Transform',
+            "inputs_check", 'normalization','LocKernel_Transform','RDC_Transform','RDE_Transform']
 
 ## --- Preprocess --- ##
 
@@ -116,7 +116,7 @@ def expr_filter(df_exp, df_pheno, gene_filter=None, filter_args: dict = {}):
     :rtype: dict
     """
     if gene_filter is None:
-        df_exp = df_exp[(df_exp >= 1).any(axis=1)]
+        df_exp = df_exp[(df_exp >= 1).sum(axis=1) >= df_exp.shape[1] * 0.1]
     elif gene_filter == 'f':
         thres = filter_args.get('thres', 0.05)
         f, p = f_classif(df_exp.T.values, df_pheno.values)
@@ -168,43 +168,43 @@ def outer_subtract(x, absolute=True):
     else:
         return x[:, np.newaxis] - x[np.newaxis, :]
 
-def RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering):
-    """Transform the data by RDC(Relative Distance Correlation)
+def RDC_Transform(df_exp,df_pheno,**kwargs):
+    """RDC transform.
 
-    :param data: inputs data with rows as samples and columns as genes.
-    :type data: pd.DataFrame
-    :param pheno: phenotype data corresponding to expression data.
-    :type pheno: pd.Series
-    :param centering_kernel: Whether to center the kernel matrix 
-    :type centering_kernel: bool
-    :param double_centering: Whether to double center the kernel matrix 
-    :type double_centering: bool
-    :return: transformed data.
+    :param df_exp: Expression dataframe.
+    :type df_exp: pandas.DataFrame
+    :param df_pheno: Phenotype dataframe.
+    :type df_pheno: pandas.Series
+    :return: RDC transformed dataframe.
     :rtype: numpy.array
     """
+    from sklearn.manifold import spectral_embedding
+
     data = df_exp.T
-    f_corr_mat = lambda data: __Kernel_centering(
-        1-np.abs(1-pairwise_distances(data.T,metric='correlation')),
-        centering_kernel,double_centering)
+    f_corr_mat = lambda data: np.abs(1-pairwise_distances(data.T,metric='correlation'))
+        
     data1 = data[df_pheno==df_pheno.unique()[0]]
     data2 = data[df_pheno==df_pheno.unique()[1]]
 
-    kmat1 = f_corr_mat(data1.values)
-    kmat2 = f_corr_mat(data2.values)
-
+    kmat1 = spectral_embedding(f_corr_mat(data1.values),n_components=kwargs.get('n_components',16))
+    kmat2 = spectral_embedding(f_corr_mat(data2.values),n_components=kwargs.get('n_components',16))
     kmat = np.concatenate([kmat1,kmat2])
     return kmat
 
 def RDE_Transform(df_exp, df_pheno, kernel_type, absolute=True,):
-    """Mean Kernel transform.
+    """RDE transform.
 
-    :param MbyPheno: Mean or median matrix calculated by pheno.
-    :type MbyPheno: pandas.DataFrame
-    :param genes_mixed: mixed genes.
+    :param df_exp: Expression dataframe.
+    :type df_exp: pandas.DataFrame
+    :param df_pheno: Phenotype dataframe.
+    :type df_pheno: pandas.Series
+    :param kernel_type: kernel type.should be one of 'mean' and 'median'.
+    :type kernel_type: str
+    :param absolute: calculate outer subtract absolute or not, defaults to True
     :type absolute: bool, optional
-    :return: Mean Kernel transform matrix.
+    :return: RDE transformed dataframe.
     :rtype: numpy.array
-    """
+    """    
     if 'mean' in kernel_type:
         MbyPheno = df_exp.groupby(df_pheno, axis=1).mean()
     elif 'median' in kernel_type:
@@ -295,7 +295,7 @@ def __Kernel_centering(Mat, centering_kernel, double_centering, ):
 
 
 @kw_decorator(kw='before_cluster_df')
-def Kernel_Transform(
+def LocKernel_Transform(
     df_exp, df_pheno, kernel_type,
     centering_kernel=True,
     outer_subtract_absolute=True,
@@ -309,8 +309,7 @@ def Kernel_Transform(
     :param df_pheno: Phenotype dataframe.
     :type df_pheno: pandas.Series
     :param kernel_type: Kernel type, one of the following:
-    'mean','median','corr','merged' 
-    functions are also allowed.
+    'mean','median',functions are also allowed.
     :type kernel_type: str or function
     :param centering_kernel: whether to centering kernel, defaults to True
     :type centering_kernel: bool, optional
@@ -333,18 +332,8 @@ def Kernel_Transform(
                 df_exp, df_pheno, kernel_type, outer_subtract_absolute, )
 
             __Kernel_centering(Mat, centering_kernel, double_centering)
-        
-        elif kernel_type in ['corr']:
-            Mat = RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering)
-        
-        elif kernel_type in ['merged']:
-            # FIXME #
-            z = lambda x: (x - x.mean())/x.std()
-            Mat1 = RDC_Transform(df_exp,df_pheno,centering_kernel,double_centering)
-            Mat2 = RDE_Transform(df_exp, df_pheno, 'mean', outer_subtract_absolute,)
-            __Kernel_centering(Mat2, centering_kernel, double_centering)
-            Mat = np.concatenate((z(Mat1),z(Mat2)),axis=1)
-        
+
+
         else:
             raise ValueError("The kernel type is not in the list.")
 
@@ -358,4 +347,21 @@ def Kernel_Transform(
 
     return Mat
 
+@kw_decorator(kw='before_cluster_df')
+def CorrKernel_Transform(
+    df_exp, df_pheno,
+    n_components=16):
+    """Correlation Kernel Transform. This function is decorated by :func:`MATTE.utils.kw_decorator`.
 
+    :param df_exp: Expression dataframe.
+    :type df_exp: pandas.DataFrame
+    :param df_pheno: Phenotype dataframe.
+    :type df_pheno: pandas.Series
+    :param n_components: number of components used in spectral embedding, defaults to 16
+    :type n_components: int, optional
+    :return: kernel matrix
+    :rtype: dict { key:'before_cluster_df' ; value:numpy.array}
+    """
+    
+    Mat = RDC_Transform(df_exp,df_pheno,n_components=n_components)
+    return Mat
