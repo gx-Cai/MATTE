@@ -116,10 +116,14 @@ for i,func in enumerate([f_classif, chi2]):
 
 # 2.2 MATTE
 
-AP = MATTE.AlignPipe()
-AP.funcs = [AP.funcs[0]] + AP.funcs[4:] ## Delete preprocess step.(performed previously)
-ME = MATTE.ModuleEmbedder(pipeline=AP)
-ME.gene_rank(data.loc[label.index],label)
+gene_rank = pd.Series(index = data.columns,data=0)
+pipe = MATTE.AlignPipe()
+pipe.funcs[4].add_params(centering_kernel=True,double_centering=True,outer_subtract_absolute=True,)
+pipe.funcs = [pipe.funcs[0]]+pipe.funcs[4:]
+pipe.cluster_func[0].add_params(dist_type='a')
+print(pipe)
+ME = MATTE.GeneRanker(view='module',pipeline=pipe)
+ME.gene_rank(data,label)
 
 feasrank['MATTE'] = ME.gene_ranking
 
