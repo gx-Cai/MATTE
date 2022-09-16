@@ -1,5 +1,5 @@
 # MATTE package User Guide
-
+[![Downloads](https://pepy.tech/badge/matte)](https://pepy.tech/project/matte)  [![Downloads](https://badge.fury.io/py/MATTE.svg)](https://badge.fury.io/py/MATTE.svg)
 ## Description
 
 MATTE (Module Alignment of TranscripTomE) is a python package aiming to analyze transcriptome from samples with different phenotypes in a module view. Differential expression (DE) is commonly used in analyzing transcriptome data. However, genes do not work alone; they collaborate. In recent years, network and module-based differential methods have been developed to obtain more information. New problems appear to make sure module or network structure is preserved in all of the phenotypes. To that end, we proposed MATTE to find the conserved module and diverged module by treating genes from different phenotypes as individual ones. By doing so, meaningful markers and modules can be found to understand the difference between phenotypes better.
