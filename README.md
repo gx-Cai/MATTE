@@ -15,6 +15,21 @@ In the first place, MATTE merges the data from phenotypes, seeing genes from dif
 4. In a module view, "Markers" can be easily transferred to other cases but not over fits compared to a gene view.
 5. The result of MATTE can be easily analyzed.  
 
+## How to cite
+Related Paper:
+
+Cai, Guoxing, Zhan Zhou, and Gu Xun. 2022. “MATTE: Anti-Noise Module Alignedment for Phenotype-Gene-Related.” BioRxiv, January, 2022.05.29.493935. https://doi.org/10.1101/2022.05.29.493935.
+
+
+```bibtex
+@misc{MATTEAntinoise,
+  title = {{{MATTE}}: Anti-Noise Module Alignedment for Phenotype-Gene-Related},
+  author = {Cai, Guoxing and Zhou, Zhan and Xun, Gu},
+  date = {2022-05-30},
+  doi = {10.1101/2022.05.29.493935},
+  url = {http://biorxiv.org/content/early/2022/05/31/2022.05.29.493935},
+}
+```
 
 ## Install
 1. Install from pip is recommended.

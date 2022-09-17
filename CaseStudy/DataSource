@@ -1,6 +1,5 @@
-GSE100796:
-    DownloadLink: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE100796 
-    Ref: Xu, Chuan, Qian Li, Olga Efimova, Liu He, Shoji Tatsumoto, Vita Stepanova, Takao Oishi, et al. 2018. “Human-Specific Features of Spatial Gene Expression and Regulation in Eight Brain Regions.” Genome Research 28 (8): 1097–1110. https://doi.org/10.1101/gr.231357.117.
+BRCA:
+    Download from: TCGA Projects
 
 scRNA:
     DownloadLink: https://doi.org/10.5281/zenodo.3357167
