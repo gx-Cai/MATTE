@@ -132,8 +132,52 @@ feasrank['MATTE'] = ME.gene_ranking
 fea_file_map = {'NB':'NBDropsFS_genes.csv','M3':'M3drop_genes.csv',"HV":'BrenneckeHV_genes.csv'}
 for fea,file_dir in fea_file_map.items():
         feasrank[fea] = -pd.read_csv(os.path.join(training_data_dir,'Turn3',file_dir),index_col=0)['q.value']
-feasrank.to_csv(os.path.join(training_data_dir,'Turn3',f"{'.'.join([i.split('.')[0] for i in filtered_cell_types])}feasrank.csv"))
 
+# 2.4 Scanpy's implementation on three unsupervised methods
+
+from anndata import AnnData
+import scanpy as sc
+raw_data = pd.read_hdf(os.path.join(training_data_dir,'unprocessed.h5'),key='data')
+raw_data = raw_data.loc[label.index,:]
+ann = AnnData(raw_data)
+sc.pp.normalize_per_cell(ann)
+sc.pp.log1p(ann)
+sc.pp.highly_variable_genes(ann,flavor='seurat',)
+feasrank['seurat'] = ann.var['dispersions_norm']
+sc.pp.highly_variable_genes(ann,flavor='cell_ranger',)
+feasrank['cell_ranger'] = ann.var['dispersions_norm']
+sc.pp.highly_variable_genes(ann,flavor='seurat_v3',n_top_genes=100)
+feasrank['seurat_v3'] = ann.var['variances_norm']
+
+# 2.5 Selected form SVM model
+from sklearn.feature_selection import SelectFromModel
+selector = SelectFromModel(estimator=SVC(kernel='linear',probability=True))
+selector.fit(data,label)
+feasrank['SVM'] = np.abs(selector.estimator_.coef_.sum(axis=0))
+
+# 2.6 DC methods
+from diff_stat import * ## files in simulation.
+from itertools import combinations
+from tqdm import tqdm
+feasrank[['ECF','zscore','DCE','entropy']] = 0
+bar = tqdm(total = len(label.unique())*(len(label.unique())-1)/2)
+for l1,l2 in combinations(label.unique(),2):
+    subdata = data[(label==l1)|(label==l2)].values
+    sublabel = label[(label==l1)|(label==l2)].values
+    
+#     bar.set_description('ECF')
+#     feasrank['ECF'] += ECF(subdata,sublabel).sum(axis=1) # Running time too long.
+    bar.set_description('z')
+    feasrank['zscore'] += np.nansum(zscore(subdata,sublabel),axis=1)
+    bar.set_description('DCE')
+    feasrank['DCE'] += np.nansum(DCE(subdata,sublabel),axis=1)
+    bar.set_description('ENT')
+    feasrank['entropy'] += np.nansum(entropy(subdata,sublabel),axis=1)
+    
+    bar.update(1)
+bar.close()
+
+feasrank.to_csv(os.path.join(training_data_dir,"feasrank.csv"))
 
 # 3. Test 
 
