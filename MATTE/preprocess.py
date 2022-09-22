@@ -331,9 +331,6 @@ def LocKernel_Transform(
             Mat = RDE_Transform(
                 df_exp, df_pheno, kernel_type, outer_subtract_absolute, )
 
-            __Kernel_centering(Mat, centering_kernel, double_centering)
-
-
         else:
             raise ValueError("The kernel type is not in the list.")
 
@@ -344,6 +341,7 @@ def LocKernel_Transform(
 
     else:
         raise TypeError(f"kernel_type should be a string or a function, get {type(kernel_type)}")
+    Mat = __Kernel_centering(Mat, centering_kernel, double_centering)
 
     return Mat
 
