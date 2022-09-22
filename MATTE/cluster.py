@@ -47,7 +47,7 @@ class CrossCluster():
 
         :param model: model to cluster, must have `model_attr` attribute and `fit` method
         :type model: object
-        :param model_attr: defaults to 'label_'
+        :param model_attr: defaults to `label_`
         :type model_attr: str, optional
         """        
         def calling(data):
@@ -107,7 +107,7 @@ class CrossCluster():
                 TypeError(f"preset should be str/function/model;current {type(preset)} and cause {e}")
 
     def preset_kmeans(self):
-        """preset kmeans, default kwargs: `n_clusters`=8,`method`='a', `npass`=20
+        """preset kmeans, default kwargs: `n_clusters` =8,`method` ='a', `npass` =20
         """        
         def kcluster_calling(data,**kwargs):
             method = kwargs.get("method", "a")
@@ -123,7 +123,7 @@ class CrossCluster():
         self.build_from_func(kcluster_calling)
 
     def preset_spectrum(self,):
-        """preset spectral clustering, default kwargs: `n_clusters`=8,`use_aff`=True, `n_init`=10
+        """preset spectral clustering, default kwargs: `n_clusters` =8,`use_aff` =True, `n_init` =10
         """        
         def spectrum_calling(data,**kwargs):
             n_clusters = kwargs.get("n_clusters", 8)
@@ -139,7 +139,7 @@ class CrossCluster():
         self.build_from_func(spectrum_calling)
 
     def preset_spectral_bicluster(self):
-        """preset spectral bicluster, default kwargs: `n_clusters`=8,`use_aff`=True, `n_init`=10,`method`='log',`n_component`=`m_cluster`, `use_aff`=True
+        """preset spectral bicluster, default kwargs: `n_clusters` =8,`use_aff` =True, `n_init` =10,`method` ='log',`n_component` =`m_cluster`, `use_aff` =True
         """        
         def spectral_bicluster_calling(data,**kwargs):
             n_clusters = kwargs.get("n_clusters", 8)

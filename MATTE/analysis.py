@@ -38,14 +38,19 @@ class WeightedDataFrame(pd.DataFrame):
         :type metric: str, optional
 
         .. note:: calling from different module can be very different for their definition is not same.
+        
         The distance function can be :
+
         --- calling from scipy.spatial.pdist ---
+        
         'braycurtis', 'canberra', 'chebyshev',
         'cityblock', 'correlation', 'cosine', 'dice', 'euclidean', 'hamming',
         'jaccard', 'jensenshannon', 'kulsinski', 'mahalanobis', 'matching',
         'minkowski', 'rogerstanimoto', 'russellrao', 'seuclidean', 'sokalmichener',
         'sokalsneath', 'sqeuclidean', 'yule'.
+        
         --- calling from Bio.cluster.distancematrix ---
+        
         'e': Euclidean ;
         'b': City-block .
         'c': Pearson correlation;
@@ -72,35 +77,46 @@ class WeightedDataFrame(pd.DataFrame):
 
 
 class ClusterResult():
-    """A class to store the result of clustering. contains inputs and results.
+    """
+    A class to store the result of clustering. contains inputs and results.
+    
     .. attribute:: res
+
     The result of clustering, a pandas.DataFrame.
     Including each gene's label in each pheno.
 
     .. attribute:: df_exp
+
     The input of clustering, a pandas.DataFrame
 
     .. attribute:: df_pheno
+
     The input of clustering, a pandas.Series
 
     .. attribute:: cluster_properties
+
     The property of clustering, a dict
     containing the score, loss, and some clustering parameters.
 
     .. attribute:: label
+
     All labels, a numpy.array
     
     .. attribute:: n_cluster
+
     The number of cluster, an int
     
     .. attribute:: JM
+
     The J-matrix of clustering, a numpy.array
     can be calculated from :attr:`res`
 
     .. attribute:: module_genes
+
     The genes of each module, a dict
+
+    .. note:: Only Not "matched" modules are contrained in this dict.
     
-    .. note:: Only Not "matched" modules are contrained.
     """    
     def __init__(self, cluster_res, before_cluster_df,df_exp,df_pheno,cluster_properties,order_rule="input") -> None:
         """
@@ -303,8 +319,9 @@ class ClusterResult():
         :param model: model used to decomposition, defaults to None
         :type model: object with fit and fit_transform, optional
         :return: 
-        group_feature: `dict`,keys : module id | values : eigenvector, 
-        group_weight: `dict`,keys : module id | values : lambda of model
+            group_feature: `dict`,keys : module id | values : eigenvector
+
+            group_weight: `dict`,keys : module id | values : lambda of model
         :rtype: tuple
         """
         df_exp = self.df_exp
@@ -544,7 +561,9 @@ def FunctionEnrich(annote_file, gene_set, category_seperate_cal=True):
     """perform GO enrichment
 
     :param annote_file: Function annotation file dir or dataframe
-    .. note:: tab-seperate file with columns:["Term_ID","GeneID","Term","Category"];File can be downloaded from https://ftp.ncbi.nih.gov/gene/DATA/
+
+        .. note:: tab-seperate file with columns:["Term_ID","GeneID","Term","Category"];File can be downloaded from https://ftp.ncbi.nih.gov/gene/DATA/
+
     :type annote_file: `str` or `pd.DataFrame`
     :param gene_set: gene set to analysis
     :type gene_set: array-like

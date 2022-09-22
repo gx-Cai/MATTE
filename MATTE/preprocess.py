@@ -302,14 +302,14 @@ def LocKernel_Transform(
     double_centering=True,
     verbose=True,
 ):
-    """Kernel Transformation. Important preprocess to cross clustering. In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
+    """
+    Kernel Transformation. Important preprocess to cross clustering. In this step, genes from different phenotypes are regarded as different genes. and the distance between them is computed. this function is decorated by :func:`MATTE.utils.kw_decorator`.
 
     :param df_exp: Expression dataframe.
     :type df_exp: pandas.DataFrame
     :param df_pheno: Phenotype dataframe.
     :type df_pheno: pandas.Series
-    :param kernel_type: Kernel type, one of the following:
-    'mean','median',functions are also allowed.
+    :param kernel_type: Kernel type, one of the following: 'mean','median',functions are also allowed.
     :type kernel_type: str or function
     :param centering_kernel: whether to centering kernel, defaults to True
     :type centering_kernel: bool, optional
