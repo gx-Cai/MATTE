@@ -336,13 +336,6 @@ class AlignPipe():
             )
 
         if target == 'cluster':
-            @kw_decorator(kw='weights')
-            def adding_pca_weights():
-                return self.get_attribute_from_transformer('explained_variance_')
-
-            self.add_step(
-                func=adding_pca_weights)
-
             self.set_cluster_method(
                 func=CrossCluster(),
                 preset='kmeans',n_clusters=8, method="a", dist_type="a",n_iters=20
