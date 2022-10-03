@@ -177,6 +177,28 @@ for l1,l2 in combinations(label.unique(),2):
     bar.update(1)
 bar.close()
 
+
+## Scanpy's implement
+
+from anndata import AnnData
+import scanpy as sc
+raw_data = pd.read_hdf(os.path.join(training_data_dir,'unprocessed.h5'),key='data')
+raw_data = raw_data.loc[label.index,:]
+ann = AnnData(raw_data)
+
+sc.pp.normalize_per_cell(ann)
+sc.pp.log1p(ann)
+
+sc.pp.highly_variable_genes(ann,flavor='seurat',)
+feasrank['seurat'] = ann.var['dispersions_norm']
+
+sc.pp.highly_variable_genes(ann,flavor='cell_ranger',)
+feasrank['cell_ranger'] = ann.var['dispersions_norm']
+
+sc.pp.highly_variable_genes(ann,flavor='seurat_v3',n_top_genes=100)
+feasrank['seurat_v3'] = ann.var['variances_norm']
+
+
 feasrank.to_csv(os.path.join(training_data_dir,"feasrank.csv"))
 
 # 3. Test 

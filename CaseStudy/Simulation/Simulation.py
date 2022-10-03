@@ -222,6 +222,107 @@ def main_noise(n_iters=10,subsample = 100):
         all_results[f"mix_{_}"] = pd.DataFrame(results)
     return all_results
 
+def main_batch(n_iters=10):
+    from genSimDat import gendat_mix
+    from tqdm import trange
+    allres_auc = {}
+    for _ in trange(n_iters):
+        gen,truelabel,negtive_gen = gendat_mix(n_genes=10)
+        data = pd.DataFrame(gen) # row samples, col genes
+        genes = pd.Series([f'G{i}' for i in range(data.shape[1])])
+        samples= pd.Series([f'S{i}' for i in range(data.shape[0])] + \
+            [f'NS{i}' for i in range(negtive_gen.shape[0])])
+        pheno = pd.Series([1]*data.shape[0] + [0]*negtive_gen.shape[0],index=samples)
+        data = pd.concat([data,pd.DataFrame(negtive_gen)],axis=0).reset_index(drop=True)
+        data = pd.DataFrame(data.values,index=samples.values,columns=genes)
+        truelabel = pd.Series(truelabel,index=genes)
+
+        results = { 
+            i: RunMethods_batch(
+                add_noise_biased(data,type='loc',levels=[i]+[0]*4),
+                pheno,truelabel)
+            for i in np.linspace(0.1,1,10)
+        }
+        allres_auc[f"mix_{_}"] = pd.DataFrame(results)
+    return allres_auc
+
+def main_confuse(n_iters=10,ranker = relative_rank,**kwargs):
+    from genSimDat import gendat_mix
+    from tqdm import trange
+
+    n_genes = 10
+    
+    confuse_mat = pd.DataFrame(index=['S','W','N'],columns=['S','W','N'],data=0)
+    diff_patten = pd.DataFrame(
+        data="N",
+        index = [f"G{i}" for i in range(n_genes*8*(10+1))],columns = ['DE','DC'])
+    diff_patten.loc[[f"G{i}" for i in range(n_genes)],:] = ["S","S"]
+    diff_patten.loc[[f"G{i}" for i in range(n_genes,2*n_genes)],:] = ["S","W"]
+    diff_patten.loc[[f"G{i}" for i in range(2*n_genes,3*n_genes)],:] = ["W","S"]
+    diff_patten.loc[[f"G{i}" for i in range(3*n_genes,4*n_genes)],:] = ["W","W"]
+    diff_patten.loc[[f"G{i}" for i in range(4*n_genes,5*n_genes)],:] = ["S","N"]
+    diff_patten.loc[[f"G{i}" for i in range(5*n_genes,6*n_genes)],:] = ["W","N"]
+    diff_patten.loc[[f"G{i}" for i in range(6*n_genes,7*n_genes)],:] = ["N","S"]
+    diff_patten.loc[[f"G{i}" for i in range(7*n_genes,8*n_genes)],:] = ["N","W"]
+    
+    for _ in trange(n_iters):
+        gen,truelabel,negtive_gen = gendat_mix(n_genes=n_genes)
+        data = pd.DataFrame(gen) # row samples, col genes
+        genes = pd.Series([f'G{i}' for i in range(data.shape[1])])
+        samples= pd.Series([f'S{i}' for i in range(data.shape[0])] + \
+            [f'NS{i}' for i in range(negtive_gen.shape[0])])
+        pheno = pd.Series([1]*data.shape[0] + [0]*negtive_gen.shape[0],index=samples)
+        data = pd.concat([data,pd.DataFrame(negtive_gen)],axis=0).reset_index(drop=True)
+        data = pd.DataFrame(data.values,index=samples.values,columns=genes)
+        truelabel = pd.Series(truelabel,index=genes)
+
+        rank = pd.Series(ranker(data,pheno,**kwargs),index=data.columns)
+        # rank_order = pd.Series(index=rank.sort_values(ascending=False).index, data=list(range(rank.shape[0])))
+
+        # mcc_rank = pd.Series(
+        #     [mcc(truelabel,(rank_order<=i).astype(int)[truelabel.index]) for i in range(len(rank))])
+        # pred = (rank >= rank[rank_order.index[mcc_rank.argmax()]]).astype(int)
+        thres = rank[diff_patten[(diff_patten==['N','N']).all(axis=1)].index].quantile(0.95)
+        pred = (rank >= thres).astype(int)
+        
+        for depat in ['S','W','N']:
+            for  dcpat in ['S','W','N']:
+                pat_genes = diff_patten.index[(diff_patten == [depat,dcpat]).all(axis=1)]
+                confuse_mat.loc[depat,dcpat] += pred[pat_genes].mean()
+    confuse_mat /= n_iters
+    return confuse_mat
+
+def main_test(n_iters=10,type='mix'):
+    from genSimDat import gendat_mix,gendat_dc,gendat_de
+    from tqdm import trange
+    allres_auc = []
+    allres_line = []
+
+    if type=='mix':
+        gendat_func = gendat_mix
+    elif type=='de':
+        gendat_func = gendat_de
+    elif type=='dc':
+        gendat_func = gendat_dc
+
+    for _ in trange(n_iters):
+        gen,truelabel,negtive_gen = gendat_func()
+        data = pd.DataFrame(gen) # row samples, col genes
+        genes = pd.Series([f'G{i}' for i in range(data.shape[1])])
+        samples= pd.Series([f'S{i}' for i in range(data.shape[0])] + \
+            [f'NS{i}' for i in range(negtive_gen.shape[0])])
+        pheno = pd.Series([1]*data.shape[0] + [0]*negtive_gen.shape[0],index=samples)
+        data = pd.concat([data,pd.DataFrame(negtive_gen)],axis=0).reset_index(drop=True)
+        data = pd.DataFrame(data.values,index=samples.values,columns=genes)
+        truelabel = pd.Series(truelabel,index=genes)
+
+        result_auc,result_line = RunMethods_eva(data,pheno,truelabel)
+        allres_auc.append(result_auc)
+        allres_line.append(result_line)
+
+    return pd.concat(allres_auc),pd.concat(allres_line)
+
+
 # ------ visualization ----- #
 def dict2df_flatten(d):
     df = pd.concat(d.values(),axis=1)
@@ -264,6 +365,22 @@ def acc_line(all_results,ylabel):
     plt.xlabel('Noise')
     return f
 
+def confuse_mat_heat_seq(confuse_mat,method_name,ax,row=False,col=False):
+    confuse_mat.loc['N','N'] = 1- confuse_mat.loc['N','N']
+    sns.heatmap(
+        confuse_mat,
+        vmin=0,vmax=1,
+        annot=True,cbar=False,ax=ax)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    if col:
+        ax.set_xticks(ticks=[0.5+i for i in range(3)],labels=['Strong','Weak','None'])
+    if row:
+        ax.set_yticks(ticks=[0.5+i for i in range(3)],labels=['Strong','Weak','None'])
+    ax.set_title(f'{method_name}')
+    return ax
+
+
 if __name__ == '__main__':
 
     all_results = main_accuracy(n_iters=100)
@@ -284,3 +401,30 @@ if __name__ == '__main__':
     fb2.savefig('./Results/NoiseTest_box.pdf')
     noise_result.to_csv('./Results/NoiseTest.csv')
     
+    confuse_mat_rdm = main_confuse(n_iters=100,ranker=relative_rank,type='RDM')
+    confuse_mat_rde = main_confuse(n_iters=100,ranker=relative_rank,type='RDE')
+    confuse_mat_rdc = main_confuse(n_iters=100,ranker=relative_rank,type='RDC')
+    confuse_mat_ent = main_confuse(n_iters=100,ranker=diff_k,method=dist_ent)
+    confuse_mat_ecf = main_confuse(n_iters=100,ranker=diff_k,method=dist_ecf)
+    confuse_mat_z = main_confuse(n_iters=100,ranker=diff_k,method=dist_zscore)
+    confuse_mat_diffcoex = main_confuse(n_iters=100,ranker=diff_k,method=dist_diffcoex)
+    confuse_mat_f = main_confuse(n_iters=100,ranker=lambda x,y:f_classif(x,y)[0])
+    confuse_mat_mi = main_confuse(n_iters=100,ranker=mutual_info_classif)
+    confuse_mat_snr = main_confuse(n_iters=100,ranker=snr)
+
+    f,ax = plt.subplots(2,5,figsize=(12,6),dpi=300)
+    confuse_mat_heat_seq(confuse_mat_rdm,'RDM',ax[0,0],row=True)
+    confuse_mat_heat_seq(confuse_mat_rde,'RDE',ax[0,1])
+    confuse_mat_heat_seq(confuse_mat_rdc,'RDC',ax[0,2])
+    confuse_mat_heat_seq(confuse_mat_ent,'ENT',ax[0,3],)
+    confuse_mat_heat_seq(confuse_mat_mi,'MI',ax[0,4],)
+    confuse_mat_heat_seq(confuse_mat_ecf,'ECF',ax[1,0],row=True,col=True)
+    confuse_mat_heat_seq(confuse_mat_z,'ZSCORE',ax[1,1],col=True)
+    confuse_mat_heat_seq(confuse_mat_diffcoex,'DIFF-COEX',ax[1,2],col=True)
+    confuse_mat_heat_seq(confuse_mat_f,'F',ax[1,3],col=True)
+    confuse_mat_heat_seq(confuse_mat_snr,'SNR',ax[1,4],col=True)
+
+    f.text(0.5, 0.06, 'Differenctial Co-Expression', ha='center', va='center',fontweight='bold')
+    f.text(0.08, 0.5, 'Differenctial Expression', ha='center', va='center', rotation='vertical',fontweight='bold')
+    f.text(0.5, 0.96, 'Accuracy Matrix in simulations(FP=0.05)', ha='center',fontsize=18)
+    f.savefig('./Results/ConfuseMat.pdf',bbox_inches='tight')
