@@ -16,18 +16,22 @@ In the first place, MATTE merges the data from phenotypes, seeing genes from dif
 5. The result of MATTE can be easily analyzed.  
 
 ## How to cite
-Related Paper:
 
-Cai, Guoxing, Zhan Zhou, and Gu Xun. 2022. “MATTE: Anti-Noise Module Alignedment for Phenotype-Gene-Related.” BioRxiv, January, 2022.05.29.493935. https://doi.org/10.1101/2022.05.29.493935.
+Cai, Guoxin, Wenyi Zhao, Zhan Zhou, and Xun Gu. 2023. "MATTE: A Pipeline of Transcriptome Module Alignment for Anti-Noise Phenotype-Gene-Related Analysis." Briefings in Bioinformatics, June, bbad207. https://doi.org/10.1093/bib/bbad207.
 
 
 ```bibtex
-@misc{MATTEAntinoise,
-  title = {{{MATTE}}: Anti-Noise Module Alignedment for Phenotype-Gene-Related},
-  author = {Cai, Guoxing and Zhou, Zhan and Xun, Gu},
-  date = {2022-05-30},
-  doi = {10.1101/2022.05.29.493935},
-  url = {http://biorxiv.org/content/early/2022/05/31/2022.05.29.493935},
+@article{10.1093/bib/bbad207,
+    author = {Cai, Guoxin and Zhao, Wenyi and Zhou, Zhan and Gu, Xun},
+    title = "{MATTE: a pipeline of transcriptome module alignment for anti-noise phenotype-gene-related analysis}",
+    journal = {Briefings in Bioinformatics},
+    year = {2023},
+    month = {06},
+    issn = {1477-4054},
+    doi = {10.1093/bib/bbad207},
+    url = {https://doi.org/10.1093/bib/bbad207},
+    note = {bbad207},
+    eprint = {https://academic.oup.com/bib/advance-article-pdf/doi/10.1093/bib/bbad207/50516522/bbad207.pdf},
 }
 ```
 
