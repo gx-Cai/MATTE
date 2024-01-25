@@ -317,8 +317,8 @@ class AlignPipe():
         if preprocess:
             self.add_step(inputs_check)
             self.add_step(RPKM2TPM)
-            self.add_step(log2transform)
             self.add_step(expr_filter, gene_filter=None)
+            self.add_step(log2transform)
         
         if stats_type !='corr':
             self.add_step(
